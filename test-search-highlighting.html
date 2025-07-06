@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Search Highlighting - JSON2Table</title>
+</head>
+<body>
+    <pre>{
+  "id": 1,
+  "firstName": "Emily",
+  "lastName": "Johnson",
+  "maidenName": "Smith", 
+  "age": 28,
+  "gender": "female",
+  "email": "emily.johnson@x.dummyjson.com",
+  "phone": "+81 965-431-3024",
+  "username": "emilys",
+  "password": "emilyspass",
+  "birthDate": "1996-5-30",
+  "image": "https://dummyjson.com/icon/emilys/128",
+  "bloodGroup": "O-",
+  "height": 193.24,
+  "weight": 63.16,
+  "eyeColor": "Green",
+  "hair": {
+    "color": "Brown",
+    "type": "Curly"
+  },
+  "ip": "42.48.100.32",
+  "address": {
+    "address": "626 Main Street",
+    "city": "Phoenix",
+    "state": "Mississippi",
+    "stateCode": "MS",
+    "postalCode": "29112",
+    "coordinates": {
+      "lat": -77.16213,
+      "lng": -92.084824
+    },
+    "country": "United States"
+  },
+  "macAddress": "47:fa:41:18:ec:eb",
+  "university": "University of Wisconsin--Madison",
+  "bank": {
+    "cardExpire": "03/26",
+    "cardNumber": "9289760655481815",
+    "cardType": "Elo",
+    "currency": "CNY",
+    "iban": "YPUXISOBI7TTHPK2BR3HAIXL"
+  },
+  "company": {
+    "department": "Engineering",
+    "name": "Dooley, Kozey and Cronin",
+    "title": "Sales Manager",
+    "address": {
+      "address": "263 Tenth Street",
+      "city": "San Francisco",
+      "state": "Wisconsin",
+      "stateCode": "WI",
+      "postalCode": "37657",
+      "coordinates": {
+        "lat": 71.814525,
+        "lng": -161.150263
+      },
+      "country": "United States"
+    }
+  },
+  "ein": "977-175",
+  "ssn": "900-590-289",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.93 Safari/537.36",
+  "crypto": {
+    "coin": "Bitcoin",
+    "wallet": "0xb9fc2fe63b2a6c003f1c324c3bfa53259162181a",
+    "network": "Ethereum (ERC20)"
+  },
+  "role": "admin"
+}</pre>
+
+    <script src="content.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        
+        .instructions {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .instructions h2 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        
+        .test-case {
+            background: #e8f4fd;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-family: Monaco, Consolas, monospace;
+            font-size: 14px;
+        }
+    </style>
+    
+    <div style="position: fixed; top: 20px; left: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10000; max-width: 400px;">
+        <h1>🔍 Search Highlighting Test</h1>
+        
+        <div class="instructions">
+            <h2>Test Instructions:</h2>
+            <p>The JSON should auto-convert to a property-value table. Try searching for various terms to see them highlighted:</p>
+            
+            <div class="test-case">• Search "Emily" - highlights in name fields</div>
+            <div class="test-case">• Search "Phoenix" - highlights in address</div>
+            <div class="test-case">• Search "Engineering" - highlights in company</div>
+            <div class="test-case">• Search "Bitcoin" - highlights in crypto object</div>
+            <div class="test-case">• Search "United States" - highlights in nested address</div>
+        </div>
+        
+        <p><strong>Expected behavior:</strong></p>
+        <ul>
+            <li>✅ Matching text should be highlighted in yellow</li>
+            <li>✅ Highlights should appear in both property names and values</li>
+            <li>✅ Search should be case-insensitive</li>
+            <li>✅ Expanded objects should also show highlights</li>
+            <li>✅ Expansions should stay open while searching</li>
+        </ul>
+    </div>

@@ -403,10 +403,26 @@
           font-size: 11px;
           border: 1px solid var(--border-color);
           line-height: 1.4;
-        }
-        .nested-object-detailed strong {
+        }        .nested-object-detailed strong {
           color: var(--object-badge);
           font-weight: 600;
+        }
+        
+        /* Search highlighting */
+        .search-highlight {
+          background: #ffeb3b;
+          color: #333;
+          padding: 1px 2px;
+          border-radius: 2px;
+          font-weight: 600;
+        }
+        
+        /* Dark mode search highlighting */
+        @media (prefers-color-scheme: dark) {
+          .search-highlight {
+            background: #ffc107;
+            color: #000;
+          }
         }
       `;
       document.head.appendChild(style);
@@ -1638,9 +1654,7 @@
       if (value === undefined) return 'undefined';
       if (Array.isArray(value)) return 'array';
       return typeof value;
-    }
-
-    formatCellValueWithExpansion(value, rowIndex, col) {
+    }    formatCellValueWithExpansion(value, rowIndex, col) {
       if (value === null || value === undefined) return '';
       
       if (Array.isArray(value)) {
@@ -1671,14 +1685,14 @@
                         return `<tr class="inline-table-row">
                           ${arrayColumns.map(acol => {
                             const cellValue = item[acol];
-                            return `<td class="inline-table-cell">${cellValue !== undefined ? this.formatArrayCellValue(cellValue) : '<span class="null-value">-</span>'}</td>`;
+                            return `<td class="inline-table-cell">${cellValue !== undefined ? this.highlightSearchTerm(this.formatArrayCellValue(cellValue)) : '<span class="null-value">-</span>'}</td>`;
                           }).join('')}
                         </tr>`;
                       } else {
                         return `<tr class="inline-table-row">
                           <td class="inline-table-cell" colspan="${arrayColumns.length}">
                             <span class="inline-item-index">${itemIndex + 1}.</span>
-                            <span class="inline-value">${this.formatInlineValue(item)}</span>
+                            <span class="inline-value">${this.highlightSearchTerm(this.formatInlineValue(item))}</span>
                           </td>
                         </tr>`;
                       }
@@ -1721,8 +1735,8 @@
                       const widthClass = isWideContent ? ' wide-content' : '';
                       
                       return `<tr class="inline-table-row">
-                        <td class="inline-table-cell inline-property-name">${key}</td>
-                        <td class="inline-table-cell inline-property-value${widthClass}">${this.formatInlineValue(val, rowIndex, col, key)}</td>
+                        <td class="inline-table-cell inline-property-name">${this.highlightSearchTerm(key)}</td>
+                        <td class="inline-table-cell inline-property-value${widthClass}">${this.highlightSearchTerm(this.formatInlineValue(val, rowIndex, col, key))}</td>
                       </tr>`;
                     }).join('')}
                   </tbody>
@@ -1734,8 +1748,8 @@
         return html;
       }
         const stringValue = String(value);
-      // Return full string for complete text selection
-      return stringValue;
+      // Apply search highlighting to the value
+      return this.highlightSearchTerm(stringValue);
     }
 
     formatInlineValue(value, parentRowIndex = null, parentCol = null, nestedKey = null) {
@@ -1885,10 +1899,27 @@
       if (typeof value === 'string' && value.length > 50) {
         return value.substring(0, 50) + '...';
       }
-      
-      const stringValue = String(value);
+        const stringValue = String(value);
       // Return full string for complete text selection
       return stringValue;
+    }
+
+    highlightSearchTerm(text) {
+      // If no search query or text is not a string, return as is
+      if (!this.searchQuery || typeof text !== 'string') {
+        return text;
+      }
+      
+      // Create a case-insensitive regex to find all matches
+      const regex = new RegExp(`(${this.escapeRegex(this.searchQuery)})`, 'gi');
+      
+      // Replace matches with highlighted spans
+      return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+    }
+
+    escapeRegex(string) {
+      // Escape special regex characters
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     attachOptimizedEventListeners() {
@@ -2072,13 +2103,13 @@
       if (Array.isArray(value)) return `<span class="nested-array">[Array: ${value.length} items]</span>`;
       if (typeof value === 'object') return `<span class="nested-object">{Object: ${Object.keys(value).length} props}</span>`;
       return String(value);
-    }
-
-    search(query) {
+    }    search(query) {
       if (!query.trim()) {
         this.filteredData = this.originalData;
+        this.searchQuery = null; // Clear search highlighting
       } else {
         this.performSearch(query);
+        this.searchQuery = query.toLowerCase(); // Store for highlighting
       }
       
       // Keep expansions when searching - don't clear them
