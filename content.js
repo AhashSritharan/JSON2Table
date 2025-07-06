@@ -189,29 +189,34 @@
 
       // Add table styles
       const style = document.createElement('style');
-      style.textContent = `
-        .json2table-table {
+      style.textContent = `        .json2table-table {
           width: 100%;
           border-collapse: collapse;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           font-size: 14px;
-        }
-        .json2table-table th {
+          table-layout: auto;
+        }        .json2table-table th {
           background: var(--header-bg);
           color: var(--text-color);
-          padding: 12px 8px;
+          padding: 16px 16px;
           text-align: left;
           border-bottom: 2px solid var(--border-color);
           font-weight: 600;
           position: sticky;
           top: 0;
           z-index: 100;
-        }
-        .json2table-table td {
-          padding: 8px;
+        }        .json2table-table td {
+          padding: 16px;
           border-bottom: 1px solid var(--border-color);
           color: var(--text-color);
           vertical-align: top;
+          word-wrap: break-word;
+          white-space: normal;
+        }
+        
+        /* Apply minimum width only to cells with substantial content */
+        .json2table-table td.wide-content {
+          min-width: 200px;
         }
         .json2table-table tr:hover {
           background: var(--hover-bg);
@@ -1396,12 +1401,46 @@
         <tr data-row-index="${rowIndex}" class="main-row">
           ${this.columns.map(col => {
             const value = row[col];
-            return `<td class="json2table-cell" data-col="${col}" data-row="${rowIndex}">
-              ${this.formatCellValueWithExpansion(value, rowIndex, col)}
+            const cellContent = this.formatCellValueWithExpansion(value, rowIndex, col);
+            // Determine if this cell needs wide content class
+            const isWideContent = this.shouldUseWideContent(value, cellContent);
+            const widthClass = isWideContent ? ' wide-content' : '';
+            return `<td class="json2table-cell${widthClass}" data-col="${col}" data-row="${rowIndex}">
+              ${cellContent}
             </td>`;
           }).join('')}
         </tr>
-      `;    }
+      `;
+    }
+
+    shouldUseWideContent(value, cellContent) {
+      // Single digits, booleans, short numbers don't need wide columns
+      if (typeof value === 'number' && Math.abs(value) < 1000) return false;
+      if (typeof value === 'boolean') return false;
+      if (value === null || value === undefined) return false;
+      
+      // Arrays and objects always need wide content for expansion
+      if (Array.isArray(value) || (typeof value === 'object' && value !== null)) return true;
+      
+      // String content - check length
+      if (typeof value === 'string') {
+        // Short strings (like IDs, status, single words) don't need wide columns
+        if (value.length <= 10) return false;
+        // Medium strings might need some width
+        if (value.length <= 30) return false;
+        // Long strings definitely need wide columns
+        return true;
+      }
+      
+      // For rendered HTML content, check if it contains expansion elements
+      if (typeof cellContent === 'string') {
+        if (cellContent.includes('expandable-array') || cellContent.includes('expandable-object')) return true;
+        // Long rendered content
+        if (cellContent.length > 50) return true;
+      }
+      
+      return false;
+    }
 
     getArrayColumns(arrayItems) {
       const columnSet = new Set();
