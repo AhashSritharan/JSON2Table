@@ -308,13 +308,12 @@
         }
         .inline-table-row:nth-child(even):hover {
           background: var(--hover-bg);
-        }
-        .inline-table-cell {
+        }        .inline-table-cell {
           padding: 6px 8px;
           border-right: 1px solid var(--border-color);
           color: var(--text-color);
           vertical-align: top;
-          word-break: break-word;
+          white-space: nowrap;
         }
         .inline-table-cell:last-child {
           border-right: none;
@@ -864,14 +863,11 @@
         position: sticky;
         top: 0;
         z-index: 10;
-      }
-      .json2table-table td {
+      }      .json2table-table td {
         padding: 8px;
         border-bottom: 1px solid #f3f4f6;
-        max-width: 200px;
-        overflow: hidden;
-        text-overflow: ellipsis;
         white-space: nowrap;
+        vertical-align: top;
       }
       .json2table-table tr:hover {
         background: #f9fafb;
@@ -1014,9 +1010,6 @@
       }      .array-sub-cell {
         padding: 4px 8px;
         border-bottom: 1px solid #f1f5f9;
-        max-width: 120px;
-        overflow: hidden;
-        text-overflow: ellipsis;
         white-space: nowrap;
         font-size: 11px;
       }
@@ -1117,13 +1110,9 @@
         color: #1e40af;
         font-size: 11px;
         border-bottom: 1px solid #f1f5f9;
-      }
-      .object-value-cell {
+      }      .object-value-cell {
         padding: 6px 8px;
         border-bottom: 1px solid #f1f5f9;
-        max-width: 200px;
-        overflow: hidden;
-        text-overflow: ellipsis;
         white-space: nowrap;
         font-size: 11px;
       }
@@ -1172,16 +1161,11 @@
         display: inline-block;
         background: #f8fafc;
         padding: 2px 6px;
-        margin: 0 4px 2px 0;
-        border-radius: 3px;
-        font-size: 11px;
-        color: #1e293b;
+        margin: 0 4px 2px 0;        border-radius: 3px;
+        font-size: 11px;        color: #1e293b;
         border: 1px solid #e2e8f0;
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        max-width: 120px;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
       .array-spacer {
         background: #fafafa;
@@ -1285,11 +1269,9 @@
         font-weight: 600;
         color: #6b7280;
         flex-shrink: 0;
-      }
-      .item-value, .property-value {
+      }      .item-value, .property-value {
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         font-size: 12px;
-        word-break: break-word;
         flex: 1;
       }
       .string-value { color: #059669; }
@@ -1487,9 +1469,8 @@
       if (typeof value === 'number') {
         return value % 1 === 0 ? value.toString() : value.toFixed(2);
       }
-      
-      // Truncate long strings
-      return stringValue.length > 40 ? stringValue.substring(0, 37) + '...' : stringValue;
+        // Return full string for complete text selection
+      return stringValue;
     }    escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
@@ -1529,9 +1510,8 @@
       if (typeof value === 'object' && value !== null) {
         return `<span class="nested-object">{${Object.keys(value).length} props}</span>`;
       }
-      
-      // Truncate long strings
-      return stringValue.length > 50 ? stringValue.substring(0, 47) + '...' : stringValue;
+        // Return full string for complete text selection
+      return stringValue;
     }
 
     getValueType(value) {
@@ -1621,11 +1601,8 @@
         
         return html;
       }
-      
-      const stringValue = String(value);
-      if (stringValue.length > 60) {
-        return `<span title="${stringValue}">${stringValue.substring(0, 57)}...</span>`;
-      }
+        const stringValue = String(value);
+      // Return full string for complete text selection
       return stringValue;
     }
     
@@ -1654,11 +1631,8 @@
           // Fall through to regular formatting
         }
       }
-      
-      const stringValue = String(value);
-      if (stringValue.length > 30) {
-        return `<span title="${stringValue}">${stringValue.substring(0, 27)}...</span>`;
-      }
+        const stringValue = String(value);
+      // Return full string for complete text selection
       return stringValue;
     }    attachOptimizedEventListeners() {
       // Single delegated event listener for maximum performance
