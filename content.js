@@ -1362,8 +1362,11 @@
     document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
     document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
     document.getElementById('json2table-export').onclick = () => tableViewer.exportCSV();
-  }  // Ultra-high-performance table viewer with expandable arrays
-  class TableViewer {    constructor(data) {
+  }
+
+  // Ultra-high-performance table viewer with expandable arrays
+  class TableViewer {
+    constructor(data) {
       this.originalData = data;
       this.filteredData = data;
       this.container = document.getElementById('json2table-table-container');
@@ -1371,6 +1374,13 @@
       this.visibleRows = Math.ceil(window.innerHeight / this.rowHeight) + 5;
       this.scrollTop = 0;
       this.columns = this.extractColumns(data);
+      
+      // Add stable row IDs that don't change when filtering
+      this.originalData = data.map((row, index) => ({
+        ...row,
+        __rowId: index // Stable identifier for expansions
+      }));
+      this.filteredData = this.originalData;
       
       // Array expansion tracking
       this.expandedArrays = new Set(); // Track which arrays are expanded
@@ -1381,7 +1391,9 @@
       this.renderThrottle = 16;
       this.rafId = null; // For requestAnimationFrame scroll handling
       this.boundScrollHandler = null; // Bound scroll handler reference
-    }extractColumns(data) {
+    }
+
+    extractColumns(data) {
       // Ensure data is an array
       if (!Array.isArray(data) || data.length === 0) {
         return [];
@@ -1394,7 +1406,9 @@
         }
       });
       return Array.from(columnSet);
-    }    render() {
+    }
+
+    render() {
       // Simple render - no virtual scrolling, just render all rows
       const html = `
         <table class="json2table-table">
@@ -1411,7 +1425,9 @@
 
       this.container.innerHTML = html;
       this.attachOptimizedEventListeners();
-    }    renderAllRows() {
+    }
+
+    renderAllRows() {
       // Simply render all rows without any virtual scrolling complexity
       let html = '';
       for (let i = 0; i < this.filteredData.length; i++) {
@@ -1426,7 +1442,9 @@
       const baseHeight = this.filteredData.length * this.rowHeight;
       const expansionHeight = this.expandedArrays.size * 100; // Estimate 100px per expansion
       return baseHeight + expansionHeight;
-    }    calculateVisibleRange() {
+    }
+
+    calculateVisibleRange() {
       // Simplified virtual scrolling calculation
       const rowHeight = this.rowHeight;
       const startIndex = Math.max(0, Math.floor(this.scrollTop / rowHeight) - 5);
@@ -1436,10 +1454,14 @@
       );
       
       return { startIndex, endIndex };
-    }    calculateOffsetTop(startIndex) {
+    }
+
+    calculateOffsetTop(startIndex) {
       // Always use consistent calculation for smooth scrolling
       return startIndex * this.rowHeight;
-    }renderRowsWithExpansions(startIndex, endIndex) {
+    }
+
+    renderRowsWithExpansions(startIndex, endIndex) {
       let html = '';
       for (let i = startIndex; i < endIndex; i++) {
         const row = this.filteredData[i];
@@ -1447,12 +1469,15 @@
         html += this.renderMainRow(row, i);
       }
       return html;
-    }    renderMainRow(row, rowIndex) {
+    }
+
+    renderMainRow(row, rowIndex) {
+      const stableRowId = row.__rowId; // Use stable ID instead of changing row index
       return `
         <tr data-row-index="${rowIndex}" class="main-row">
           ${this.columns.map(col => {
             const value = row[col];
-            const cellContent = this.formatCellValueWithExpansion(value, rowIndex, col);
+            const cellContent = this.formatCellValueWithExpansion(value, stableRowId, col);
             // Determine if this cell needs wide content class
             const isWideContent = this.shouldUseWideContent(value, cellContent);
             const widthClass = isWideContent ? ' wide-content' : '';
@@ -1535,7 +1560,9 @@
       
       // Limit to 10 columns for better display
       return columns.slice(0, 10);
-    }    formatArrayCellValue(value) {
+    }
+
+    formatArrayCellValue(value) {
       if (value === null || value === undefined) return '<span class="null-value">-</span>';
       
       const stringValue = String(value);
@@ -1561,7 +1588,9 @@
       }
         // Return full string for complete text selection
       return stringValue;
-    }    escapeHtml(text) {
+    }
+
+    escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
@@ -1609,7 +1638,9 @@
       if (value === undefined) return 'undefined';
       if (Array.isArray(value)) return 'array';
       return typeof value;
-    }    formatCellValueWithExpansion(value, rowIndex, col) {
+    }
+
+    formatCellValueWithExpansion(value, rowIndex, col) {
       if (value === null || value === undefined) return '';
       
       if (Array.isArray(value)) {
@@ -1705,7 +1736,9 @@
         const stringValue = String(value);
       // Return full string for complete text selection
       return stringValue;
-    }    formatInlineValue(value, parentRowIndex = null, parentCol = null, nestedKey = null) {
+    }
+
+    formatInlineValue(value, parentRowIndex = null, parentCol = null, nestedKey = null) {
       if (value === null || value === undefined) return '<span class="null-value">null</span>';
       
       if (Array.isArray(value)) {
@@ -1856,14 +1889,18 @@
       const stringValue = String(value);
       // Return full string for complete text selection
       return stringValue;
-    }attachOptimizedEventListeners() {
+    }
+
+    attachOptimizedEventListeners() {
       // Single delegated event listener for maximum performance
       this.container.removeEventListener('click', this.handleTableClick);
       this.handleTableClick = this.handleTableClick.bind(this);
       this.container.addEventListener('click', this.handleTableClick);
       
       // No scroll handler needed since we're not using virtual scrolling
-    }handleTableClick(e) {
+    }
+
+    handleTableClick(e) {
       // Handle array expansion/collapse badges
       const arrayBadge = e.target.closest('.expandable-array');
       if (arrayBadge) {
@@ -1892,7 +1929,9 @@
           this.showValueModal(value, `${col} (Row ${rowIndex + 1})`);
         }
       }
-    }    toggleArrayExpansion(arrayKey) {      
+    }
+
+    toggleArrayExpansion(arrayKey) {      
       if (this.expandedArrays.has(arrayKey)) {
         this.expandedArrays.delete(arrayKey);
       } else {
@@ -1912,7 +1951,9 @@
       
       // Simple re-render without complex scroll handling
       this.render();
-    }throttledScrollHandler(e) {
+    }
+
+    throttledScrollHandler(e) {
       // Use requestAnimationFrame for smoother scrolling
       if (this.rafId) {
         cancelAnimationFrame(this.rafId);
@@ -1928,7 +1969,9 @@
 
     formatColumnName(name) {
       return name.split('.').pop().replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-    }    showValueModal(value, title) {
+    }
+
+    showValueModal(value, title) {
       // Remove existing modal
       if (this.modalOverlay) {
         this.modalOverlay.remove();
@@ -2029,15 +2072,16 @@
       if (Array.isArray(value)) return `<span class="nested-array">[Array: ${value.length} items]</span>`;
       if (typeof value === 'object') return `<span class="nested-object">{Object: ${Object.keys(value).length} props}</span>`;
       return String(value);
-    }    search(query) {
+    }
+
+    search(query) {
       if (!query.trim()) {
         this.filteredData = this.originalData;
       } else {
         this.performSearch(query);
       }
       
-      // Clear expansions on new search
-      this.expandedArrays.clear();
+      // Keep expansions when searching - don't clear them
       this.render();
     }
 
@@ -2060,12 +2104,15 @@
     searchWithWorker(query) {
       // Fallback to synchronous search if worker setup fails
       this.performSearch(query);
-    }    expandAll() {
+    }
+
+    expandAll() {
       // Find all arrays and objects in the current filtered data and expand them recursively
       this.filteredData.forEach((row, rowIndex) => {
+        const stableRowId = row.__rowId; // Use stable ID instead of changing index
         this.columns.forEach(col => {
           const value = row[col];
-          this.expandAllNested(value, rowIndex, col, '');
+          this.expandAllNested(value, stableRowId, col, '');
         });
       });
       
@@ -2172,7 +2219,9 @@
       a.click();
       
       URL.revokeObjectURL(url);
-    }    getRowHeight(rowIndex) {
+    }
+
+    getRowHeight(rowIndex) {
       // Simple consistent height for all rows
       return this.rowHeight;
     }
