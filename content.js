@@ -2051,22 +2051,11 @@
       // Fallback to synchronous search if worker setup fails
       this.performSearch(query);
     }    expandAll() {
-      // Find all arrays and objects in the current filtered data and expand them
+      // Find all arrays and objects in the current filtered data and expand them recursively
       this.filteredData.forEach((row, rowIndex) => {
         this.columns.forEach(col => {
           const value = row[col];
-          
-          // Expand arrays
-          if (Array.isArray(value) && value.length > 0) {
-            const arrayKey = `${rowIndex}-${col}`;
-            this.expandedArrays.add(arrayKey);
-          }
-          
-          // Expand objects
-          if (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length > 0) {
-            const objectKey = `${rowIndex}-${col}-object`;
-            this.expandedArrays.add(objectKey);
-          }
+          this.expandAllNested(value, rowIndex, col, '');
         });
       });
       
@@ -2075,6 +2064,36 @@
       
       // Show feedback
       this.showTemporaryMessage(`✅ Expanded ${this.expandedArrays.size} arrays and objects`, 'success');
+    }
+
+    expandAllNested(value, rowIndex, col, nestedPath) {
+      if (Array.isArray(value) && value.length > 0) {
+        // Expand this array
+        const arrayKey = nestedPath ? `${rowIndex}-${col}-${nestedPath}-array` : `${rowIndex}-${col}`;
+        this.expandedArrays.add(arrayKey);
+        
+        // Recursively expand nested objects/arrays within array items
+        value.forEach((item, itemIndex) => {
+          if (typeof item === 'object' && item !== null) {
+            Object.keys(item).forEach(itemKey => {
+              const nestedValue = item[itemKey];
+              const newPath = nestedPath ? `${nestedPath}-${itemIndex}-${itemKey}` : `${itemIndex}-${itemKey}`;
+              this.expandAllNested(nestedValue, rowIndex, col, newPath);
+            });
+          }
+        });
+      } else if (typeof value === 'object' && value !== null && Object.keys(value).length > 0) {
+        // Expand this object
+        const objectKey = nestedPath ? `${rowIndex}-${col}-${nestedPath}-object` : `${rowIndex}-${col}-object`;
+        this.expandedArrays.add(objectKey);
+        
+        // Recursively expand nested objects/arrays within this object
+        Object.keys(value).forEach(key => {
+          const nestedValue = value[key];
+          const newPath = nestedPath ? `${nestedPath}-${key}` : key;
+          this.expandAllNested(nestedValue, rowIndex, col, newPath);
+        });
+      }
     }
 
     collapseAll() {
