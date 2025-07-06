@@ -427,24 +427,31 @@
           }
         }
       `;
-      document.head.appendChild(style);
-
-      // Initialize table viewer
+      document.head.appendChild(style);      // Initialize table viewer
       const tableViewer = new TableViewer(tableData);
       tableViewer.render();
+
+      // Check if auto-expand is enabled and expand all automatically
+      this.getSettings().then(settings => {
+        if (settings.autoExpand) {
+          // Small delay to ensure table is fully rendered
+          setTimeout(() => {
+            tableViewer.expandAll();
+          }, 100);
+        }
+      });
 
       // Event listeners
       document.getElementById('json2table-search').oninput = (e) => tableViewer.search(e.target.value);
       document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
       document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
       document.getElementById('json2table-export').onclick = () => tableViewer.exportCSV();
-    }
-
-    static async getSettings() {
+    }    static async getSettings() {
       return new Promise((resolve) => {
-        chrome.storage.local.get(['autoConvert', 'themeOverride'], (result) => {
+        chrome.storage.local.get(['autoConvert', 'autoExpand', 'themeOverride'], (result) => {
           resolve({
             autoConvert: result.autoConvert !== false, // Default to true
+            autoExpand: result.autoExpand !== false, // Default to true
             themeOverride: result.themeOverride || 'system'
           });
         });
@@ -766,11 +773,17 @@
           });
         } else {
           sendResponse({ success: false, note: result.note || 'No suitable JSON found' });
-        }
-      }).catch(error => {
+        }      }).catch(error => {
         console.error('JSON detection error:', error);
         sendResponse({ success: false, error: error.message });
       });      return true; // Will respond asynchronously
+    }
+    
+    if (request.action === 'settingsChanged') {
+      // Handle settings changes from popup
+      // Settings are automatically saved to chrome.storage by popup.js
+      // No response needed
+      return false;
     }
   });
 
@@ -1355,11 +1368,21 @@
     `;
     
     document.head.appendChild(style);
-    document.body.appendChild(viewer);
-
-    // Initialize table
+    document.body.appendChild(viewer);    // Initialize table
     const tableViewer = new TableViewer(data);
-    tableViewer.render();    // Event listeners
+    tableViewer.render();
+
+    // Check if auto-expand is enabled and expand all automatically
+    AutoJSONDetector.getSettings().then(settings => {
+      if (settings.autoExpand) {
+        // Small delay to ensure table is fully rendered
+        setTimeout(() => {
+          tableViewer.expandAll();
+        }, 100);
+      }
+    });
+
+    // Event listeners
     document.getElementById('json2table-close').onclick = () => viewer.remove();
     document.getElementById('json2table-search').oninput = (e) => tableViewer.search(e.target.value);
     document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
