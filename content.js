@@ -7,11 +7,13 @@
 
   // Automatic JSON detection based on json-formatter approach
   class AutoJSONDetector {
-    static async checkAndConvert() {
-      // Only proceed if auto-convert is enabled
-      const settings = await this.getSettings();
-      if (!settings.autoConvert) {
-        return { converted: false, note: 'Auto-convert disabled' };
+    static async checkAndConvert(forceConvert = false) {
+      // Only proceed if auto-convert is enabled (unless forced)
+      if (!forceConvert) {
+        const settings = await this.getSettings();
+        if (!settings.autoConvert) {
+          return { converted: false, note: 'Auto-convert disabled' };
+        }
       }
 
       // Look for body>pre element (json-formatter approach)
@@ -746,8 +748,7 @@
           } else {
             prepared[key] = value;
           }
-        }
-      }
+        }      }
       return prepared;
     }
   }
@@ -755,35 +756,21 @@
   // Message listener for communication with popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'detectJson') {
-      try {
-        const jsonData = JSONDetector.detectJSONInPage();
-        if (jsonData) {
-          const tableData = JSONDetector.extractTableData(jsonData);
-          detectedData = DataFlattener.prepareTableData(tableData);
-          
+      // Use forced conversion for manual detection (bypass auto-convert setting)
+      AutoJSONDetector.checkAndConvert(true).then(result => {
+        if (result.converted) {
           sendResponse({
             success: true,
-            recordCount: detectedData.length,
-            data: detectedData
+            recordCount: result.rawLength ? Math.round(result.rawLength/1024) + 'KB' : 'Unknown size',
+            converted: true
           });
         } else {
-          sendResponse({ success: false });
+          sendResponse({ success: false, note: result.note || 'No suitable JSON found' });
         }
-      } catch (error) {
+      }).catch(error => {
         console.error('JSON detection error:', error);
         sendResponse({ success: false, error: error.message });
-      }
-      return true;
-    }
-    
-    if (request.action === 'openViewer') {
-      if (detectedData && detectedData.length > 0) {
-        openTableViewer(detectedData);
-        sendResponse({ success: true });
-      } else {
-        sendResponse({ success: false, error: 'No data detected' });
-      }
-      return true;
+      });      return true; // Will respond asynchronously
     }
   });
 
@@ -2316,24 +2303,28 @@
     // Document already loaded
     setTimeout(() => AutoJSONDetector.checkAndConvert(), 100);
   }
-
   // Message listener for manual trigger and settings
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'detectJSON') {
-      detectedData = JSONDetector.detectJSONInPage();
-      sendResponse({ hasData: !!detectedData });
+      // Use the same successful auto-convert logic
+      AutoJSONDetector.checkAndConvert().then(result => {
+        sendResponse({ hasData: result.converted, result: result });
+      }).catch(error => {
+        sendResponse({ hasData: false, error: error.message });
+      });
+      return true;
     } else if (request.action === 'showTable') {
-      if (detectedData) {
-        const tableData = JSONDetector.extractTableData(detectedData);
-        if (tableData.length > 0) {
-          showTableViewer(tableData);
+      // Use the same successful auto-convert logic
+      AutoJSONDetector.checkAndConvert().then(result => {
+        if (result.converted) {
           sendResponse({ success: true });
         } else {
-          sendResponse({ success: false, message: 'No suitable table data found' });
+          sendResponse({ success: false, message: result.note || 'No suitable table data found' });
         }
-      } else {
-        sendResponse({ success: false, message: 'No JSON data detected' });
-      }
+      }).catch(error => {
+        sendResponse({ success: false, message: error.message });
+      });
+      return true;
     } else if (request.action === 'autoConvert') {
       AutoJSONDetector.checkAndConvert().then(result => {
         sendResponse(result);
