@@ -352,13 +352,17 @@
         .inline-property-value, .inline-value {
           color: var(--text-color);
         }
-        
-        /* Style for table-based object property names */
+          /* Style for table-based object property names */
         .inline-table-cell.inline-property-name {
           background: var(--header-bg);
           font-weight: 600;
           color: var(--object-badge);
-          width: 30%;
+          /* Remove fixed width - let content determine size naturally */
+        }
+        
+        /* Apply smart width logic to object property value cells */
+        .inline-table-cell.inline-property-value.wide-content {
+          min-width: 200px;
         }
         .inline-property {
           margin-right: 8px;
@@ -1680,13 +1684,16 @@
                       <th>Property</th>
                       <th>Value</th>
                     </tr>
-                  </thead>
-                  <tbody>                    ${Object.entries(value).map(([key, val]) => 
-                      `<tr class="inline-table-row">
+                  </thead>                  <tbody>                    ${Object.entries(value).map(([key, val]) => {
+                      // Determine if this property value needs wide content class
+                      const isWideContent = this.shouldUseWideContent(val, null);
+                      const widthClass = isWideContent ? ' wide-content' : '';
+                      
+                      return `<tr class="inline-table-row">
                         <td class="inline-table-cell inline-property-name">${key}</td>
-                        <td class="inline-table-cell inline-property-value">${this.formatInlineValue(val, rowIndex, col, key)}</td>
-                      </tr>`
-                    ).join('')}
+                        <td class="inline-table-cell inline-property-value${widthClass}">${this.formatInlineValue(val, rowIndex, col, key)}</td>
+                      </tr>`;
+                    }).join('')}
                   </tbody>
                 </table>
               </div>
@@ -1778,14 +1785,17 @@
                         <th style="font-size: 9px;">Property</th>
                         <th style="font-size: 9px;">Value</th>
                       </tr>
-                    </thead>
-                    <tbody>
-                      ${Object.entries(value).map(([key, val]) => 
-                        `<tr class="inline-table-row">
+                    </thead>                    <tbody>
+                      ${Object.entries(value).map(([key, val]) => {
+                        // Apply smart width logic to nested object property values
+                        const isWideContent = this.shouldUseWideContent(val, null);
+                        const widthClass = isWideContent ? ' wide-content' : '';
+                        
+                        return `<tr class="inline-table-row">
                           <td class="inline-table-cell inline-property-name" style="font-size: 10px;">${key}</td>
-                          <td class="inline-table-cell inline-property-value" style="font-size: 10px;">${this.formatInlineValue(val, parentRowIndex, parentCol, `${nestedKey}-${key}`)}</td>
-                        </tr>`
-                      ).join('')}
+                          <td class="inline-table-cell inline-property-value${widthClass}" style="font-size: 10px;">${this.formatInlineValue(val, parentRowIndex, parentCol, `${nestedKey}-${key}`)}</td>
+                        </tr>`;
+                      }).join('')}
                     </tbody>
                   </table>
                 </div>
