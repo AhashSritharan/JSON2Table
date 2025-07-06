@@ -273,14 +273,20 @@
           max-height: 200px;
           overflow-y: auto;
         }
-        
-        /* Inline table styles */
+          /* Inline table styles */
         .inline-array-table-wrapper {
           margin-top: 6px;
           border-radius: 4px;
           overflow: hidden;
           border: 1px solid var(--border-color);
-        }        .inline-table {
+        }
+        
+        .inline-object-table-wrapper {
+          margin-top: 6px;
+          border-radius: 4px;
+          overflow: hidden;
+          border: 1px solid var(--border-color);
+        }.inline-table {
           width: 100%;
           border-collapse: collapse;
           font-size: 11px;
@@ -338,14 +344,21 @@
           font-weight: 600;
           margin-right: 6px;
           font-family: monospace;
-        }
-        .inline-property-name {
+        }        .inline-property-name {
           color: var(--object-badge);
           font-weight: 600;
           margin-right: 6px;
         }
         .inline-property-value, .inline-value {
           color: var(--text-color);
+        }
+        
+        /* Style for table-based object property names */
+        .inline-table-cell.inline-property-name {
+          background: var(--header-bg);
+          font-weight: 600;
+          color: var(--object-badge);
+          width: 30%;
         }
         .inline-property {
           margin-right: 8px;
@@ -370,14 +383,26 @@
         .date-value {
           color: #7c3aed;
           font-weight: 500;
-        }
-        .nested-array, .nested-object {
+        }        .nested-array, .nested-object {
           color: #64748b;
           background: var(--button-bg);
           padding: 1px 4px;
           border-radius: 2px;
           font-size: 10px;
           border: 1px solid var(--border-color);
+        }
+        .nested-object-detailed {
+          color: #374151;
+          background: var(--expand-bg);
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 11px;
+          border: 1px solid var(--border-color);
+          line-height: 1.4;
+        }
+        .nested-object-detailed strong {
+          color: var(--object-badge);
+          font-weight: 600;
         }
       `;
       document.head.appendChild(style);
@@ -612,12 +637,19 @@
       }
 
       return null;
-    }
-
-    static isValidDataStructure(data) {
+    }    static isValidDataStructure(data) {
       // Check if it's an array of objects (like the products example)
       if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
         return true;
+      }
+      
+      // Check if it's a single object (like a user profile) - NEW: Support single objects
+      if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+        // Accept any non-empty object as valid for single-row table
+        const keys = Object.keys(data);
+        if (keys.length > 0) {
+          return true;
+        }
       }
       
       // Check if it's an object with an array property
@@ -630,26 +662,41 @@
       }
       
       return false;
-    }
-
-    static extractTableData(jsonData) {
+    }    static extractTableData(jsonData) {
       // If it's directly an array, use it
       if (Array.isArray(jsonData)) {
         return jsonData;
       }
       
-      // If it's an object, find the largest array of objects
-      let largestArray = [];
-      for (const key in jsonData) {
-        if (Array.isArray(jsonData[key]) && 
-            jsonData[key].length > largestArray.length &&
-            jsonData[key].length > 0 && 
-            typeof jsonData[key][0] === 'object') {
-          largestArray = jsonData[key];
+      // NEW: If it's a single object, convert it to property-value format
+      if (typeof jsonData === 'object' && jsonData !== null && !Array.isArray(jsonData)) {
+        // Check if this object has array properties first
+        let hasArrayProperty = false;
+        let largestArray = [];
+        
+        for (const key in jsonData) {
+          if (Array.isArray(jsonData[key]) && 
+              jsonData[key].length > largestArray.length &&
+              jsonData[key].length > 0 && 
+              typeof jsonData[key][0] === 'object') {
+            largestArray = jsonData[key];
+            hasArrayProperty = true;
+          }
         }
+        
+        // If we found array properties, use the largest one
+        if (hasArrayProperty && largestArray.length > 0) {
+          return largestArray;
+        }
+        
+        // Otherwise, convert single object to property-value rows
+        return Object.entries(jsonData).map(([key, value]) => ({
+          property: key,
+          value: value
+        }));
       }
       
-      return largestArray;
+      return [];
     }
   }
   // Data preparation utility - keeps objects intact for expansion
@@ -1621,19 +1668,27 @@
         let html = `<span class="object-badge expandable-object" data-object-key="${objectKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} object properties">
           ${expandIcon} {${propCount}} ${propCount === 1 ? 'property' : 'properties'}
         </span>`;
-        
-        // Add inline expansion content
+          // Add inline expansion content in table format
         if (isExpanded) {
           html += `
             <div class="inline-object-expansion" data-object-key="${objectKey}">
-              <div class="inline-expansion-header">Properties:</div>
-              <div class="inline-object-properties">
-                ${Object.entries(value).map(([key, val]) => 
-                  `<div class="inline-property-row">
-                    <span class="inline-property-name">${key}:</span>
-                    <span class="inline-property-value">${this.formatInlineValue(val)}</span>
-                  </div>`
-                ).join('')}
+              <div class="inline-expansion-header">Properties (${propCount}):</div>
+              <div class="inline-object-table-wrapper">
+                <table class="inline-table">
+                  <thead>
+                    <tr>
+                      <th>Property</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>                    ${Object.entries(value).map(([key, val]) => 
+                      `<tr class="inline-table-row">
+                        <td class="inline-table-cell inline-property-name">${key}</td>
+                        <td class="inline-table-cell inline-property-value">${this.formatInlineValue(val, rowIndex, col, key)}</td>
+                      </tr>`
+                    ).join('')}
+                  </tbody>
+                </table>
               </div>
             </div>`;
         }
@@ -1643,18 +1698,130 @@
         const stringValue = String(value);
       // Return full string for complete text selection
       return stringValue;
-    }
-    
-    formatInlineValue(value) {
+    }    formatInlineValue(value, parentRowIndex = null, parentCol = null, nestedKey = null) {
       if (value === null || value === undefined) return '<span class="null-value">null</span>';
       
       if (Array.isArray(value)) {
+        // For nested arrays, make them expandable too
+        if (parentRowIndex !== null && parentCol !== null && nestedKey !== null) {
+          const nestedArrayKey = `${parentRowIndex}-${parentCol}-${nestedKey}-array`;
+          const isExpanded = this.expandedArrays.has(nestedArrayKey);
+          const expandIcon = isExpanded ? '[-]' : '[+]';
+          
+          let html = `<span class="array-badge expandable-array" data-array-key="${nestedArrayKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} nested array">
+            ${expandIcon} [${value.length} items]
+          </span>`;
+          
+          if (isExpanded && value.length > 0) {
+            const arrayColumns = this.getArrayColumns(value);
+            html += `
+              <div class="inline-array-expansion" data-array-key="${nestedArrayKey}" style="margin-top: 4px;">
+                <div class="inline-expansion-header" style="font-size: 10px;">Nested Array (${value.length}):</div>
+                <div class="inline-array-table-wrapper">
+                  <table class="inline-table" style="font-size: 10px;">
+                    <thead>
+                      <tr>
+                        ${arrayColumns.map(col => `<th style="font-size: 9px;">${this.formatColumnName(col)}</th>`).join('')}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${value.map((item, itemIndex) => {
+                        if (typeof item === 'object' && item !== null) {
+                          return `<tr class="inline-table-row">
+                            ${arrayColumns.map(acol => {
+                              const cellValue = item[acol];
+                              return `<td class="inline-table-cell">${cellValue !== undefined ? this.formatArrayCellValue(cellValue) : '<span class="null-value">-</span>'}</td>`;
+                            }).join('')}
+                          </tr>`;
+                        } else {
+                          return `<tr class="inline-table-row">
+                            <td class="inline-table-cell" colspan="${arrayColumns.length}">
+                              <span class="inline-item-index">${itemIndex + 1}.</span>
+                              <span class="inline-value">${this.formatInlineValue(item)}</span>
+                            </td>
+                          </tr>`;
+                        }
+                      }).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>`;
+          }
+          
+          return html;
+        }
+        
         return `<span class="nested-array">[${value.length} items]</span>`;
       }
       
       if (typeof value === 'object') {
         const keys = Object.keys(value);
-        return `<span class="nested-object">{${keys.length} props}</span>`;
+        
+        // For nested objects, make them expandable
+        if (parentRowIndex !== null && parentCol !== null && nestedKey !== null) {
+          const nestedObjectKey = `${parentRowIndex}-${parentCol}-${nestedKey}-object`;
+          const isExpanded = this.expandedArrays.has(nestedObjectKey);
+          const expandIcon = isExpanded ? '[-]' : '[+]';
+          
+          let html = `<span class="object-badge expandable-object" data-object-key="${nestedObjectKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} nested object">
+            ${expandIcon} {${keys.length} props}
+          </span>`;
+          
+          if (isExpanded) {
+            html += `
+              <div class="inline-object-expansion" data-object-key="${nestedObjectKey}" style="margin-top: 4px;">
+                <div class="inline-expansion-header" style="font-size: 10px;">Nested Object (${keys.length}):</div>
+                <div class="inline-object-table-wrapper">
+                  <table class="inline-table" style="font-size: 10px;">
+                    <thead>
+                      <tr>
+                        <th style="font-size: 9px;">Property</th>
+                        <th style="font-size: 9px;">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${Object.entries(value).map(([key, val]) => 
+                        `<tr class="inline-table-row">
+                          <td class="inline-table-cell inline-property-name" style="font-size: 10px;">${key}</td>
+                          <td class="inline-table-cell inline-property-value" style="font-size: 10px;">${this.formatInlineValue(val, parentRowIndex, parentCol, `${nestedKey}-${key}`)}</td>
+                        </tr>`
+                      ).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>`;
+          }
+          
+          return html;
+        }
+        
+        // For simple objects with few properties, show them inline
+        if (keys.length <= 4) {
+          const props = keys.map(key => {
+            const propValue = value[key];
+            let displayValue;
+            
+            // Handle nested values more gracefully
+            if (typeof propValue === 'object' && propValue !== null) {
+              if (Array.isArray(propValue)) {
+                displayValue = `[${propValue.length} items]`;
+              } else {
+                displayValue = `{${Object.keys(propValue).length} props}`;
+              }
+            } else if (typeof propValue === 'string' && propValue.length > 30) {
+              displayValue = propValue.substring(0, 30) + '...';
+            } else {
+              displayValue = String(propValue);
+            }
+            
+            return `<strong>${key}:</strong> ${displayValue}`;
+          }).join(', ');
+          
+          return `<span class="nested-object-detailed">{${props}}</span>`;
+        } else {
+          // For complex objects, show summary
+          return `<span class="nested-object">{${keys.length} props}</span>`;
+        }
       }
       
       if (typeof value === 'boolean') {
@@ -1670,10 +1837,16 @@
           // Fall through to regular formatting
         }
       }
-        const stringValue = String(value);
+      
+      // Truncate very long strings
+      if (typeof value === 'string' && value.length > 50) {
+        return value.substring(0, 50) + '...';
+      }
+      
+      const stringValue = String(value);
       // Return full string for complete text selection
       return stringValue;
-    }    attachOptimizedEventListeners() {
+    }attachOptimizedEventListeners() {
       // Single delegated event listener for maximum performance
       this.container.removeEventListener('click', this.handleTableClick);
       this.handleTableClick = this.handleTableClick.bind(this);

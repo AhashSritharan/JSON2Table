@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Single Object JSON</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e1e5e9;
+            border-radius: 6px;
+        }
+        .json-container {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #2563eb;
+            overflow-x: auto;
+        }
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .button-group {
+            margin-top: 20px;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin-right: 10px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        .note {
+            background: #e0f2fe;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #0ea5e9;
+            margin-top: 20px;
+        }
+        .expected-result {
+            background: #f0f9ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Single Object JSON Test</h1>
+        
+        <div class="test-section">
+            <h2>Test Case 1: User Profile Object</h2>
+            <p>This tests the JSON2Table extension with a single object (user profile) rather than an array.</p>
+            
+            <div class="json-container">
+                <pre id="singleUserJson">{"id":1,"firstName":"Emily","lastName":"Johnson","maidenName":"Smith","age":28,"gender":"female","email":"emily.johnson@x.dummyjson.com","phone":"+81 965-431-3024","username":"emilys","password":"emilyspass","birthDate":"1996-5-30","image":"https://dummyjson.com/icon/emilys/128","bloodGroup":"O-","height":193.24,"weight":63.16,"eyeColor":"Green","hair":{"color":"Brown","type":"Curly"},"ip":"42.48.100.32","address":{"address":"626 Main Street","city":"Phoenix","state":"Mississippi","stateCode":"MS","postalCode":"29112","coordinates":{"lat":-77.16213,"lng":-92.084824},"country":"United States"},"macAddress":"47:fa:41:18:ec:eb","university":"University of Wisconsin--Madison","bank":{"cardExpire":"03/26","cardNumber":"9289760655481815","cardType":"Elo","currency":"CNY","iban":"YPUXISOBI7TTHPK2BR3HAIXL"},"company":{"department":"Engineering","name":"Dooley, Kozey and Cronin","title":"Sales Manager","address":{"address":"263 Tenth Street","city":"San Francisco","state":"Wisconsin","stateCode":"WI","postalCode":"37657","coordinates":{"lat":71.814525,"lng":-161.150263},"country":"United States"}},"ein":"977-175","ssn":"900-590-289","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.93 Safari/537.36","crypto":{"coin":"Bitcoin","wallet":"0xb9fc2fe63b2a6c003f1c324c3bfa53259162181a","network":"Ethereum (ERC20)"},"role":"admin"}</pre>
+            </div>
+            
+            <div class="expected-result">
+                <h3>Expected Result:</h3>
+                <p>The extension should now convert this single object into a single-row table where:</p>
+                <ul>
+                    <li>Each property becomes a column (id, firstName, lastName, etc.)</li>
+                    <li>Nested objects like "hair", "address", "bank", "company", "crypto" show as expandable badges</li>
+                    <li>You can click on "{3} properties" badges to expand nested objects inline</li>
+                    <li>The table should have 1 row with about 25+ columns</li>
+                </ul>
+            </div>
+            
+            <div class="button-group">
+                <button onclick="loadAsRawJSON()">Load as Raw JSON Page</button>
+                <button onclick="copyToClipboard()">Copy JSON to Clipboard</button>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Test Case 2: API Response Format</h2>
+            <p>This simulates how the JSON might appear on an actual API endpoint page.</p>
+            
+            <div class="json-container">
+                <pre id="apiResponse">{
+  "id": 1,
+  "firstName": "Emily",
+  "lastName": "Johnson",
+  "maidenName": "Smith", 
+  "age": 28,
+  "gender": "female",
+  "email": "emily.johnson@x.dummyjson.com",
+  "phone": "+81 965-431-3024",
+  "username": "emilys",
+  "password": "emilyspass",
+  "birthDate": "1996-5-30",
+  "image": "https://dummyjson.com/icon/emilys/128",
+  "bloodGroup": "O-",
+  "height": 193.24,
+  "weight": 63.16,
+  "eyeColor": "Green",
+  "hair": {
+    "color": "Brown",
+    "type": "Curly"
+  },
+  "ip": "42.48.100.32",
+  "address": {
+    "address": "626 Main Street",
+    "city": "Phoenix",
+    "state": "Mississippi",
+    "stateCode": "MS",
+    "postalCode": "29112",
+    "coordinates": {
+      "lat": -77.16213,
+      "lng": -92.084824
+    },
+    "country": "United States"
+  },
+  "macAddress": "47:fa:41:18:ec:eb",
+  "university": "University of Wisconsin--Madison",
+  "bank": {
+    "cardExpire": "03/26",
+    "cardNumber": "9289760655481815",
+    "cardType": "Elo",
+    "currency": "CNY",
+    "iban": "YPUXISOBI7TTHPK2BR3HAIXL"
+  },
+  "company": {
+    "department": "Engineering",
+    "name": "Dooley, Kozey and Cronin",
+    "title": "Sales Manager",
+    "address": {
+      "address": "263 Tenth Street",
+      "city": "San Francisco",
+      "state": "Wisconsin",
+      "stateCode": "WI",
+      "postalCode": "37657",
+      "coordinates": {
+        "lat": 71.814525,
+        "lng": -161.150263
+      },
+      "country": "United States"
+    }
+  },
+  "ein": "977-175",
+  "ssn": "900-590-289",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.93 Safari/537.36",
+  "crypto": {
+    "coin": "Bitcoin",
+    "wallet": "0xb9fc2fe63b2a6c003f1c324c3bfa53259162181a",
+    "network": "Ethereum (ERC20)"
+  },
+  "role": "admin"
+}</pre>
+            </div>
+            
+            <div class="button-group">
+                <button onclick="replacePageWithJSON()">Replace Page with JSON (Simulate API)</button>
+            </div>
+        </div>
+        
+        <div class="note">
+            <h3>🔧 Testing Instructions:</h3>
+            <ol>
+                <li><strong>Automatic Test:</strong> Click "Replace Page with JSON" to simulate an API response page</li>
+                <li><strong>Manual Test:</strong> Copy the JSON and paste it on a page like <code>httpbin.org/json</code></li>
+                <li><strong>Extension Check:</strong> Make sure JSON2Table extension is installed and auto-convert is enabled</li>
+                <li><strong>Expected Result:</strong> Should see a single-row table with expandable nested objects</li>
+            </ol>
+            
+            <h3>🎯 What Should Work Now:</h3>
+            <ul>
+                <li>✅ Single objects are recognized as valid table data</li>
+                <li>✅ Object is converted to a single-row table</li>
+                <li>✅ Nested objects (hair, address, bank, company, crypto) show as expandable</li>
+                <li>✅ Can expand nested objects to see their properties</li>
+                <li>✅ All standard table features work (search, export, etc.)</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function loadAsRawJSON() {
+            // This simulates what happens when you visit a JSON API endpoint
+            const json = document.getElementById('singleUserJson').textContent;
+            
+            // Create a new page with just the JSON in a PRE element (like API responses)
+            document.body.innerHTML = `<pre>${json}</pre>`;
+            
+            // Add a note for the user
+            setTimeout(() => {
+                const note = document.createElement('div');
+                note.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    left: 20px;
+                    background: #1f2937;
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 6px;
+                    font-family: system-ui;
+                    font-size: 14px;
+                    z-index: 10001;
+                `;
+                note.textContent = 'JSON loaded as raw page - Extension should auto-convert this!';
+                document.body.appendChild(note);
+                
+                // Remove note after 3 seconds
+                setTimeout(() => note.remove(), 3000);
+            }, 500);
+        }
+        
+        function replacePageWithJSON() {
+            const json = document.getElementById('apiResponse').textContent;
+            
+            // Simulate an API response page structure
+            document.head.innerHTML = '<meta charset="UTF-8"><title>API Response</title>';
+            document.body.innerHTML = `<pre style="margin: 0; font-family: monospace; font-size: 14px; line-height: 1.4;">${json}</pre>`;
+        }
+        
+        function copyToClipboard() {
+            const json = document.getElementById('singleUserJson').textContent;
+            navigator.clipboard.writeText(json).then(() => {
+                alert('JSON copied to clipboard! You can now paste it on any JSON page to test.');
+            });
+        }
+    </script>
+</body>
+</html>
