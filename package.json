@@ -1,0 +1,21 @@
+{
+  "name": "json2table-extension",
+  "version": "1.0.0",
+  "description": "High-performance Chrome extension for converting JSON to interactive tables",
+  "scripts": {
+    "build": "echo 'No build step required - pure vanilla JS'",
+    "test": "echo 'Open test.html in browser and load extension'",
+    "lint": "echo 'Linting not configured - using browser dev tools'"
+  },
+  "keywords": [
+    "chrome-extension",
+    "json",
+    "table",
+    "data-visualization",
+    "performance"
+  ],
+  "author": "JSON2Table Team",
+  "license": "MIT",
+  "devDependencies": {},
+  "dependencies": {}
+}

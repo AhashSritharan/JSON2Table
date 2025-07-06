@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "JSON2Table",
+  "version": "1.0.0",
+  "description": "Convert JSON data to interactive, searchable tables",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "JSON2Table"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["table-viewer.html", "table-viewer.js", "table-viewer.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JSON API Response - Auto-Convert Test</title>
+    <meta charset="utf-8">
+</head>
+<body>
+<pre>{
+  "status": "success",
+  "timestamp": "2025-07-06T18:30:00Z",
+  "data": [
+    {
+      "userId": 1001,
+      "name": "John Doe",
+      "email": "john.doe@example.com",
+      "isActive": true,
+      "joinDate": "2023-01-15",
+      "preferences": {
+        "theme": "dark",
+        "notifications": true,
+        "language": "en-US"
+      },
+      "permissions": ["read", "write", "admin"],
+      "lastActivity": {
+        "action": "login",
+        "timestamp": "2025-07-06T17:45:00Z",
+        "ipAddress": "192.168.1.100"
+      },
+      "stats": {
+        "totalPosts": 142,
+        "totalComments": 89,
+        "reputation": 2847
+      }
+    },
+    {
+      "userId": 1002,
+      "name": "Jane Smith",
+      "email": "jane.smith@example.com",
+      "isActive": false,
+      "joinDate": "2023-03-22",
+      "preferences": {
+        "theme": "light",
+        "notifications": false,
+        "language": "en-GB"
+      },
+      "permissions": ["read", "write"],
+      "lastActivity": {
+        "action": "logout",
+        "timestamp": "2025-07-05T22:15:00Z",
+        "ipAddress": "10.0.0.50"
+      },
+      "stats": {
+        "totalPosts": 67,
+        "totalComments": 234,
+        "reputation": 1256
+      }
+    },
+    {
+      "userId": 1003,
+      "name": "Mike Johnson",
+      "email": "mike.johnson@example.com",
+      "isActive": true,
+      "joinDate": "2022-11-08",
+      "preferences": {
+        "theme": "auto",
+        "notifications": true,
+        "language": "es-ES"
+      },
+      "permissions": ["read"],
+      "lastActivity": {
+        "action": "comment",
+        "timestamp": "2025-07-06T16:20:00Z",
+        "ipAddress": "172.16.0.25"
+      },
+      "stats": {
+        "totalPosts": 23,
+        "totalComments": 156,
+        "reputation": 589
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 3,
+    "hasNext": false
+  },
+  "meta": {
+    "apiVersion": "v2.1",
+    "requestId": "req_abc123def456",
+    "processingTime": "0.047s"
+  }
+}</pre>
+</body>
+</html>

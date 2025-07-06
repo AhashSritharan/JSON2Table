@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON2Table Test Page</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+        }
+        .section {
+            margin-bottom: 40px;
+            padding: 20px;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            border-left: 4px solid #2563eb;
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #1976d2;
+        }
+        .json-container {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 JSON2Table Extension Test Page</h1>
+        <p>This page contains various JSON formats to test the extension's detection capabilities</p>
+    </div>
+
+    <div class="instructions">
+        <h3>📋 How to Test:</h3>
+        <ol>
+            <li>Make sure the JSON2Table extension is installed and enabled</li>
+            <li>Click the extension icon in your browser toolbar</li>
+            <li>Click "Detect & Convert JSON" to find JSON data on this page</li>
+            <li>Click "Open Table Viewer" to see the interactive table</li>
+            <li>Try searching and exporting features</li>
+        </ol>
+    </div>
+
+    <div class="section">
+        <h3>🛍️ Sample 1: Products JSON (Your Example)</h3>
+        <p>This is the exact JSON structure you provided, perfect for testing nested objects and arrays.</p>
+        <div class="json-container">
+            <script type="application/json" id="products-data">
+            {
+              "products": [
+                {
+                  "id": 1,
+                  "title": "Essence Mascara Lash Princess",
+                  "description": "The Essence Mascara Lash Princess is a popular mascara known for its volumizing and lengthening effects.",
+                  "category": "beauty",
+                  "price": 9.99,
+                  "discountPercentage": 10.48,
+                  "rating": 2.56,
+                  "stock": 99,
+                  "tags": ["beauty", "mascara"],
+                  "brand": "Essence",
+                  "sku": "BEA-ESS-ESS-001",
+                  "weight": 4,
+                  "dimensions": {
+                    "width": 15.14,
+                    "height": 13.08,
+                    "depth": 22.99
+                  },
+                  "warrantyInformation": "1 week warranty",
+                  "shippingInformation": "Ships in 3-5 business days",
+                  "availabilityStatus": "In Stock",
+                  "reviews": [
+                    {
+                      "rating": 3,
+                      "comment": "Would not recommend!",
+                      "date": "2025-04-30T09:41:02.053Z",
+                      "reviewerName": "Eleanor Collins",
+                      "reviewerEmail": "eleanor.collins@x.dummyjson.com"
+                    },
+                    {
+                      "rating": 4,
+                      "comment": "Very satisfied!",
+                      "date": "2025-04-30T09:41:02.053Z",
+                      "reviewerName": "Lucas Gordon",
+                      "reviewerEmail": "lucas.gordon@x.dummyjson.com"
+                    }
+                  ],
+                  "returnPolicy": "No return policy",
+                  "minimumOrderQuantity": 48,
+                  "meta": {
+                    "createdAt": "2025-04-30T09:41:02.053Z",
+                    "updatedAt": "2025-04-30T09:41:02.053Z",
+                    "barcode": "5784719087687",
+                    "qrCode": "https://cdn.dummyjson.com/public/qr-code.png"
+                  },
+                  "images": ["https://cdn.dummyjson.com/product-images/beauty/essence-mascara-lash-princess/1.webp"],
+                  "thumbnail": "https://cdn.dummyjson.com/product-images/beauty/essence-mascara-lash-princess/thumbnail.webp"
+                },
+                {
+                  "id": 2,
+                  "title": "Eyeshadow Palette with Mirror",
+                  "description": "The Eyeshadow Palette with Mirror offers a versatile range of eyeshadow shades for creating stunning eye looks.",
+                  "category": "beauty",
+                  "price": 19.99,
+                  "discountPercentage": 18.19,
+                  "rating": 2.86,
+                  "stock": 34,
+                  "tags": ["beauty", "eyeshadow"],
+                  "brand": "Glamour Beauty",
+                  "sku": "BEA-GLA-EYE-002",
+                  "weight": 9,
+                  "dimensions": {
+                    "width": 9.26,
+                    "height": 22.47,
+                    "depth": 27.67
+                  },
+                  "warrantyInformation": "1 year warranty",
+                  "shippingInformation": "Ships in 2 weeks",
+                  "availabilityStatus": "In Stock",
+                  "reviews": [
+                    {
+                      "rating": 5,
+                      "comment": "Great product!",
+                      "date": "2025-04-30T09:41:02.053Z",
+                      "reviewerName": "Savannah Gomez",
+                      "reviewerEmail": "savannah.gomez@x.dummyjson.com"
+                    }
+                  ],
+                  "returnPolicy": "7 days return policy",
+                  "minimumOrderQuantity": 20,
+                  "meta": {
+                    "createdAt": "2025-04-30T09:41:02.053Z",
+                    "updatedAt": "2025-04-30T09:41:02.053Z",
+                    "barcode": "9170275171413",
+                    "qrCode": "https://cdn.dummyjson.com/public/qr-code.png"
+                  },
+                  "images": ["https://cdn.dummyjson.com/product-images/beauty/eyeshadow-palette-with-mirror/1.webp"],
+                  "thumbnail": "https://cdn.dummyjson.com/product-images/beauty/eyeshadow-palette-with-mirror/thumbnail.webp"
+                }
+              ],
+              "total": 194,
+              "skip": 0,
+              "limit": 30
+            }
+            </script>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>👥 Sample 2: Users Data</h3>
+        <p>A different JSON structure to test versatility - direct array format.</p>
+        <pre id="users-data">
+[
+  {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "age": 30,
+    "address": {
+      "street": "123 Main St",
+      "city": "New York",
+      "country": "USA",
+      "coordinates": {
+        "lat": 40.7128,
+        "lng": -74.0060
+      }
+    },
+    "preferences": {
+      "theme": "dark",
+      "notifications": true,
+      "language": "en"
+    },
+    "orders": [
+      {"id": "ORD-001", "amount": 299.99, "date": "2024-01-15"},
+      {"id": "ORD-002", "amount": 149.50, "date": "2024-02-20"}
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "age": 25,
+    "address": {
+      "street": "456 Oak Ave",
+      "city": "San Francisco",
+      "country": "USA",
+      "coordinates": {
+        "lat": 37.7749,
+        "lng": -122.4194
+      }
+    },
+    "preferences": {
+      "theme": "light",
+      "notifications": false,
+      "language": "es"
+    },
+    "orders": [
+      {"id": "ORD-003", "amount": 599.99, "date": "2024-03-10"}
+    ]
+  }
+]
+        </pre>
+    </div>
+
+    <div class="section">
+        <h3>📊 Sample 3: Analytics Data</h3>
+        <p>Testing with numerical data and timestamps.</p>
+        <script type="application/json">
+        {
+          "analytics": [
+            {
+              "date": "2024-01-01",
+              "visitors": 1250,
+              "pageViews": 3420,
+              "bounceRate": 0.34,
+              "avgSessionDuration": 185,
+              "topPages": ["/home", "/products", "/about"],
+              "demographics": {
+                "age": {"18-24": 23, "25-34": 45, "35-44": 20, "45+": 12},
+                "gender": {"male": 52, "female": 48}
+              },
+              "traffic": {
+                "organic": 68,
+                "paid": 15,
+                "social": 12,
+                "direct": 5
+              }
+            },
+            {
+              "date": "2024-01-02",
+              "visitors": 1380,
+              "pageViews": 3890,
+              "bounceRate": 0.29,
+              "avgSessionDuration": 210,
+              "topPages": ["/products", "/home", "/contact"],
+              "demographics": {
+                "age": {"18-24": 28, "25-34": 42, "35-44": 18, "45+": 12},
+                "gender": {"male": 49, "female": 51}
+              },
+              "traffic": {
+                "organic": 71,
+                "paid": 13,
+                "social": 11,
+                "direct": 5
+              }
+            }
+          ]
+        }
+        </script>
+    </div>
+
+    <div class="section">
+        <h3>🔧 Testing Features</h3>
+        <p><strong>Performance Test:</strong> The extension handles large datasets efficiently using virtual scrolling.</p>
+        <p><strong>Search Test:</strong> Try searching for "beauty", "John", or any other term in the table viewer.</p>
+        <p><strong>Export Test:</strong> Use the CSV export feature to download the filtered data.</p>
+        <p><strong>Responsive Test:</strong> Resize your browser window to see how the table adapts.</p>
+    </div>
+
+    <div class="section">
+        <h3>🎯 Expected Results</h3>
+        <ul>
+            <li><strong>Products Data:</strong> Should detect ~2 records with flattened dimensions and review counts</li>
+            <li><strong>Users Data:</strong> Should show ~2 users with flattened address and preference data</li>
+            <li><strong>Analytics Data:</strong> Should display ~2 analytics records with nested demographic data</li>
+        </ul>
+    </div>
+
+    <script>
+        // Add some dynamic content to test various scenarios
+        console.log('JSON2Table test page loaded');
+        
+        // This could be detected as JSON content in some scenarios
+        window.testData = {
+            "products": [
+                {"id": 999, "name": "Dynamic Product", "price": 99.99}
+            ]
+        };
+    </script>
+</body>
+</html>
