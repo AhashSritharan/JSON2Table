@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scroll Fix Test - JSON2Table</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 6px;
+            border-left: 4px solid #2196f3;
+        }
+        .test-button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .test-button:hover {
+            background: #1976d2;
+        }
+        .test-info {
+            margin: 10px 0;
+            padding: 10px;
+            background: #fff3e0;
+            border-radius: 4px;
+            border-left: 3px solid #ff9800;
+        }
+        #json2table-table-container {
+            height: 400px;
+            overflow: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .scroll-test-info {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 10000;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔧 Scroll Fix Test - JSON2Table Extension</h1>
+        
+        <div class="test-controls">
+            <h3>🎯 Testing Consistent Virtual Scrolling</h3>
+            <p><strong>Fixed Issue:</strong> Eliminated inconsistent height calculations that caused jumpy scrolling</p>
+            <button class="test-button" onclick="generateTestData()">Generate 1000 Rows Test Data</button>
+            <button class="test-button" onclick="expandMultipleArrays()">Expand 10 Arrays</button>
+            <button class="test-button" onclick="expandManyArrays()">Expand 30 Arrays</button>
+            <button class="test-button" onclick="clearExpansions()">Clear All Expansions</button>
+            <button class="test-button" onclick="scrollToPosition(2000)">Jump to Middle</button>
+            <button class="test-button" onclick="scrollToPosition(8000)">Jump to Bottom</button>
+        </div>
+
+        <div class="test-info">
+            <strong>🧪 Test Instructions:</strong>
+            <ol>
+                <li>Generate test data with arrays and objects</li>
+                <li>Expand multiple arrays to test virtual scrolling</li>
+                <li>Scroll manually using mouse wheel or scrollbar</li>
+                <li>Use jump buttons to test scroll position consistency</li>
+                <li>Verify scrolling is smooth without unexpected jumps</li>
+            </ol>
+        </div>
+
+        <div class="test-info">
+            <strong>✅ Expected Results:</strong>
+            <ul>
+                <li>Smooth scrolling without jumping between positions</li>
+                <li>Consistent scroll behavior regardless of expansion count</li>
+                <li>No performance degradation with many expanded items</li>
+                <li>Accurate scroll position when jumping to different sections</li>
+            </ul>
+        </div>
+
+        <div id="json2table-table-container"></div>
+    </div>
+
+    <div class="scroll-test-info" id="scrollInfo">
+        Scroll: 0px<br>
+        Expansions: 0<br>
+        Rendered Rows: 0
+    </div>
+
+    <script src="content.js"></script>
+    <script>
+        let testData = [];
+        let tableViewer = null;
+        
+        // Generate complex test data with arrays and objects
+        function generateTestData() {
+            testData = [];
+            
+            for (let i = 0; i < 1000; i++) {
+                const row = {
+                    id: i + 1,
+                    name: `Item ${i + 1}`,
+                    category: ['Electronics', 'Books', 'Clothing', 'Sports'][i % 4],
+                    price: Math.round((Math.random() * 100 + 10) * 100) / 100,
+                    inStock: Math.random() > 0.3,
+                    
+                    // Arrays for expansion testing
+                    tags: generateRandomArray(3 + (i % 5)),
+                    reviews: generateRandomArray(2 + (i % 3)),
+                    
+                    // Objects for expansion testing
+                    details: {
+                        brand: `Brand ${Math.floor(i / 10)}`,
+                        model: `Model ${i}`,
+                        year: 2020 + (i % 4),
+                        specifications: {
+                            weight: `${Math.random() * 5 + 1}kg`,
+                            dimensions: `${Math.random() * 50 + 10}cm`,
+                            color: ['Red', 'Blue', 'Green', 'Black'][i % 4]
+                        }
+                    },
+                    
+                    metadata: {
+                        created: new Date(2024, i % 12, (i % 28) + 1).toISOString(),
+                        updated: new Date().toISOString(),
+                        version: `v${i % 3 + 1}.0`,
+                        source: 'test-data'
+                    }
+                };
+                
+                testData.push(row);
+            }
+            
+            renderTable();
+            updateScrollInfo();
+        }
+        
+        function generateRandomArray(length) {
+            const items = [];
+            for (let i = 0; i < length; i++) {
+                items.push(`Item ${i + 1}`);
+            }
+            return items;
+        }
+        
+        function renderTable() {
+            if (testData.length === 0) return;
+            
+            // Clear existing table
+            const container = document.getElementById('json2table-table-container');
+            container.innerHTML = '';
+            
+            // Create new table viewer
+            tableViewer = new TableViewer(testData);
+            tableViewer.render();
+            
+            // Add scroll event listener for info display
+            container.addEventListener('scroll', updateScrollInfo);
+        }
+        
+        function expandMultipleArrays() {
+            if (!tableViewer) {
+                alert('Please generate test data first');
+                return;
+            }
+            
+            // Expand arrays in first 10 rows
+            for (let i = 0; i < 10; i++) {
+                tableViewer.expandedArrays.add(`${i}-tags`);
+                tableViewer.expandedArrays.add(`${i}-reviews`);
+            }
+            
+            tableViewer.render();
+            updateScrollInfo();
+        }
+        
+        function expandManyArrays() {
+            if (!tableViewer) {
+                alert('Please generate test data first');
+                return;
+            }
+            
+            // Expand arrays in first 30 rows (tests the old threshold logic)
+            for (let i = 0; i < 30; i++) {
+                tableViewer.expandedArrays.add(`${i}-tags`);
+                tableViewer.expandedArrays.add(`${i}-reviews`);
+                if (i % 2 === 0) {
+                    tableViewer.expandedArrays.add(`${i}-details-object`);
+                }
+            }
+            
+            tableViewer.render();
+            updateScrollInfo();
+        }
+        
+        function clearExpansions() {
+            if (!tableViewer) return;
+            
+            tableViewer.expandedArrays.clear();
+            tableViewer.render();
+            updateScrollInfo();
+        }
+        
+        function scrollToPosition(scrollTop) {
+            const container = document.getElementById('json2table-table-container');
+            container.scrollTop = scrollTop;
+            updateScrollInfo();
+        }
+        
+        function updateScrollInfo() {
+            const container = document.getElementById('json2table-table-container');
+            const scrollInfo = document.getElementById('scrollInfo');
+            
+            if (scrollInfo && tableViewer) {
+                const expansionCount = tableViewer.expandedArrays.size;
+                const { startIndex, endIndex } = tableViewer.calculateVisibleRange();
+                const renderedRows = endIndex - startIndex;
+                
+                scrollInfo.innerHTML = `
+                    Scroll: ${container.scrollTop}px<br>
+                    Expansions: ${expansionCount}<br>
+                    Rendered Rows: ${renderedRows}<br>
+                    Visible Range: ${startIndex}-${endIndex}
+                `;
+            }
+        }
+        
+        // Generate initial test data
+        generateTestData();
+        
+        console.log('🔧 Scroll Fix Test Loaded - Testing unified virtual scrolling');
+    </script>
+</body>
+</html>

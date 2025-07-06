@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test: Clean Page Fix - No Conflicting Scrollbars</title>
+    <style>
+        /* Simulate typical API response page styling that might cause conflicts */
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: monospace;
+            background: #f8f9fa;
+            overflow-x: auto; /* This could cause conflicts */
+        }
+        
+        pre {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 20px;
+            overflow: auto; /* This is often the source of conflicting scrollbars */
+            max-height: 80vh;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .header {
+            background: #343a40;
+            color: white;
+            padding: 10px 20px;
+            margin: -20px -20px 20px -20px;
+        }
+        
+        /* Additional styles that might interfere */
+        html {
+            height: 100%;
+            overflow-y: scroll;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>API Response (Simulated)</h1>
+        <p>This page simulates a typical JSON API response with potential CSS conflicts</p>
+    </div>
+    
+    <h2>JSON Data Below:</h2>
+    
+    <pre>[
+  {
+    "id": 1,
+    "title": "Product A",
+    "category": "Electronics",
+    "price": 299.99,
+    "inStock": true,
+    "tags": ["popular", "tech", "gadget"],
+    "specifications": {
+      "weight": "1.2 kg",
+      "dimensions": "20x15x5 cm",
+      "color": "Black",
+      "warranty": "2 years"
+    },
+    "reviews": [
+      {
+        "id": 1,
+        "rating": 5,
+        "comment": "Excellent product!",
+        "reviewer": "John Doe",
+        "date": "2024-01-15"
+      },
+      {
+        "id": 2,
+        "rating": 4,
+        "comment": "Good value for money",
+        "reviewer": "Jane Smith",
+        "date": "2024-01-20"
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "title": "Product B",
+    "category": "Clothing",
+    "price": 49.99,
+    "inStock": false,
+    "tags": ["fashion", "casual"],
+    "specifications": {
+      "material": "Cotton",
+      "size": "M",
+      "color": "Blue",
+      "care": "Machine wash"
+    },
+    "reviews": [
+      {
+        "id": 3,
+        "rating": 3,
+        "comment": "Average quality",
+        "reviewer": "Bob Wilson",
+        "date": "2024-01-18"
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "title": "Product C",
+    "category": "Books",
+    "price": 19.99,
+    "inStock": true,
+    "tags": ["education", "programming"],
+    "specifications": {
+      "pages": 420,
+      "publisher": "Tech Books Inc",
+      "edition": "3rd Edition",
+      "language": "English"
+    },
+    "reviews": [
+      {
+        "id": 4,
+        "rating": 5,
+        "comment": "Very informative!",
+        "reviewer": "Alice Johnson",
+        "date": "2024-01-22"
+      },
+      {
+        "id": 5,
+        "rating": 4,
+        "comment": "Well written",
+        "reviewer": "Charlie Brown",
+        "date": "2024-01-25"
+      },
+      {
+        "id": 6,
+        "rating": 5,
+        "comment": "Highly recommended",
+        "reviewer": "Diana Prince",
+        "date": "2024-01-28"
+      }
+    ]
+  }
+]</pre>
+
+    <script src="content.js"></script>
+    <script>
+        // Enable auto-convert for testing
+        chrome = {
+            storage: {
+                local: {
+                    get: (keys, callback) => {
+                        // Simulate enabled auto-convert
+                        callback({
+                            autoConvert: true,
+                            themeOverride: 'system'
+                        });
+                    }
+                }
+            }
+        };
+
+        // Test the auto-detection
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Testing clean page fix...');
+            
+            // Add some debugging
+            const originalScrollHeight = document.documentElement.scrollHeight;
+            const originalBodyHeight = document.body.scrollHeight;
+            
+            console.log('Before conversion:');
+            console.log('- Document scroll height:', originalScrollHeight);
+            console.log('- Body scroll height:', originalBodyHeight);
+            console.log('- Body overflow:', getComputedStyle(document.body).overflow);
+            console.log('- HTML overflow:', getComputedStyle(document.documentElement).overflow);
+            
+            setTimeout(() => {
+                AutoJSONDetector.checkAndConvert().then(result => {
+                    console.log('Conversion result:', result);
+                    
+                    if (result.converted) {
+                        console.log('After conversion:');
+                        console.log('- Document scroll height:', document.documentElement.scrollHeight);
+                        console.log('- Body scroll height:', document.body.scrollHeight);
+                        console.log('- Body overflow:', getComputedStyle(document.body).overflow);
+                        console.log('- HTML overflow:', getComputedStyle(document.documentElement).overflow);
+                        
+                        // Test expansion to see if scrollbars work correctly
+                        setTimeout(() => {
+                            console.log('Testing array expansion...');
+                            const expandButton = document.getElementById('json2table-expand-all');
+                            if (expandButton) {
+                                expandButton.click();
+                                console.log('Expanded all arrays - check if scrolling works properly');
+                            }
+                        }, 1000);
+                    }
+                });
+            }, 500);
+        });
+    </script>
+</body>
+</html>

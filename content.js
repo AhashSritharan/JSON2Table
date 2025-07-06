@@ -65,12 +65,12 @@
       // Verify the table data contains objects
       if (!tableData.some(item => item && typeof item === 'object' && !Array.isArray(item))) {
         return { converted: false, note: 'Table data must contain objects' };
-      }
+      }      // Store ONLY the text content before clearing everything
+      const originalTextContent = originalPreElement.textContent;
 
-      // Detach the original pre element
-      originalPreElement.remove();
+      originalPreElement.remove(); // Remove the original PRE element
 
-      // Create containers similar to json-formatter
+      // Create containers with clean structure
       const tableContainer = document.createElement('div');
       tableContainer.id = 'json2tableContainer';
       tableContainer.style.cssText = `
@@ -78,26 +78,48 @@
         background: var(--bg-color, #ffffff);
         color: var(--text-color, #333333);
         margin: 0;
-        padding: 20px;
-        min-height: 100vh;
+        padding: 0;
+        height: 100vh;
         box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
       `;
-      document.body.appendChild(tableContainer);
-
-      const rawJsonContainer = document.createElement('div');
-      rawJsonContainer.hidden = true;
-      rawJsonContainer.id = 'json2tableRaw';
-      rawJsonContainer.appendChild(originalPreElement);
-      document.body.appendChild(rawJsonContainer);
-
-      // Apply theme
+      document.body.appendChild(tableContainer);      // Apply theme
       this.applyTheme();
 
-      // Create toggle buttons
-      this.createToggleButtons(tableContainer, rawJsonContainer);      // Create table viewer
-      this.createTableInterface(tableContainer, tableData);
+      // Create table viewer
+      this.createTableInterface(tableContainer, tableData);return { converted: true, note: 'Converted to table', rawLength };
+    }    static clearPageAndResetStyles() {
+      // Remove all existing content and styles
+      document.body.innerHTML = '';
+      
+      // Remove any remaining PRE elements that might still exist
+      document.querySelectorAll('pre').forEach(pre => pre.remove());
+      
+      document.head.querySelectorAll('style').forEach(style => {
+        // Only remove non-essential styles, keep basic browser styles
+        if (!style.id || !style.id.includes('json2table')) {
+          style.remove();
+        }
+      });
 
-      return { converted: true, note: 'Converted to table', rawLength };
+      // Reset body and html styles to eliminate any scrolling conflicts
+      document.documentElement.style.cssText = `
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+      `;
+      
+      document.body.style.cssText = `
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: var(--bg-color, #ffffff);
+        color: var(--text-color, #333333);
+      `;
     }
 
     static createTableInterface(container, tableData) {
@@ -221,8 +243,7 @@
           border-left: 3px solid var(--button-active);
           margin: 5px 0;
         }
-        
-        /* Inline expansion styles */
+          /* Inline expansion styles */
         .inline-array-expansion, .inline-object-expansion {
           margin-top: 8px;
           padding: 8px;
@@ -230,6 +251,8 @@
           border-radius: 4px;
           border-left: 3px solid var(--array-badge);
           font-size: 12px;
+          position: relative;
+          z-index: 1;
         }
         .inline-object-expansion {
           border-left-color: var(--object-badge);
@@ -461,47 +484,51 @@
       });
       
       document.head.appendChild(style);
-    }
+    }  static createToggleButtons(tableContainer, rawJsonContainer) {
+    const optionBar = document.createElement('div');
+    optionBar.id = 'json2tableOptionBar';
+    optionBar.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      display: flex;
+      gap: 8px;
+      background: var(--button-bg);
+      border: 1px solid var(--button-border);
+      border-radius: 8px;
+      padding: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
 
-    static createToggleButtons(tableContainer, rawJsonContainer) {
-      const optionBar = document.createElement('div');
-      optionBar.id = 'json2tableOptionBar';
-      optionBar.style.cssText = `
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        z-index: 10000;
-        display: flex;
-        gap: 5px;
-        background: var(--button-bg);
-        border: 1px solid var(--button-border);
-        border-radius: 6px;
-        padding: 5px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      `;
+    const buttonTable = document.createElement('button');
+    buttonTable.textContent = 'JSON Table View';
+    buttonTable.style.cssText = `
+      padding: 10px 18px;
+      border: none;
+      background: var(--button-active);
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    `;
 
-      const buttonTable = document.createElement('button');
-      buttonTable.textContent = 'Table';
-      buttonTable.style.cssText = `
-        padding: 8px 16px;
-        border: 1px solid var(--button-border);
-        background: var(--button-active);
-        color: white;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-      `;
-
+    // Only add raw JSON toggle if rawJsonContainer is provided
+    if (rawJsonContainer) {
       const buttonRaw = document.createElement('button');
-      buttonRaw.textContent = 'Raw';
+      buttonRaw.textContent = 'Raw JSON';
       buttonRaw.style.cssText = `
-        padding: 8px 16px;
-        border: 1px solid var(--button-border);
+        padding: 10px 18px;
+        border: none;
         background: var(--button-bg);
         color: var(--text-color);
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
         font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s ease;
       `;
 
       let tableMode = true;
@@ -511,6 +538,10 @@
           tableMode = false;
           tableContainer.hidden = true;
           rawJsonContainer.hidden = false;
+          // Enable scrolling for raw view
+          document.body.style.overflow = 'auto';
+          document.documentElement.style.overflow = 'auto';
+          
           buttonTable.style.background = 'var(--button-bg)';
           buttonTable.style.color = 'var(--text-color)';
           buttonRaw.style.background = 'var(--button-active)';
@@ -523,6 +554,10 @@
           tableMode = true;
           tableContainer.hidden = false;
           rawJsonContainer.hidden = true;
+          // Disable scrolling for table view (table handles its own scrolling)
+          document.body.style.overflow = 'hidden';
+          document.documentElement.style.overflow = 'hidden';
+          
           buttonTable.style.background = 'var(--button-active)';
           buttonTable.style.color = 'white';
           buttonRaw.style.background = 'var(--button-bg)';
@@ -532,8 +567,15 @@
 
       optionBar.appendChild(buttonTable);
       optionBar.appendChild(buttonRaw);
-      document.body.appendChild(optionBar);
+    } else {
+      // Table-only mode - just show an indicator
+      buttonTable.style.cursor = 'default';
+      buttonTable.title = 'Currently viewing JSON as interactive table';
+      optionBar.appendChild(buttonTable);
     }
+    
+    document.body.appendChild(optionBar);
+  }
   }
 
   // JSON detection and parsing utilities
@@ -792,17 +834,19 @@
         display: flex;
         align-items: center;
         justify-content: center;
-      }
-      .json2table-content {
+      }      .json2table-content {
         flex: 1;
         overflow: hidden;
         padding: 20px;
+        display: flex;
+        flex-direction: column;
       }
       #json2table-table-container {
-        height: 100%;
+        flex: 1;
         overflow: auto;
         border: 1px solid #e5e7eb;
         border-radius: 4px;
+        min-height: 0; /* Critical for flex scrolling */
       }
       .json2table-table {
         width: 100%;
@@ -1281,8 +1325,7 @@
     document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
     document.getElementById('json2table-export').onclick = () => tableViewer.exportCSV();
   }  // Ultra-high-performance table viewer with expandable arrays
-  class TableViewer {
-    constructor(data) {
+  class TableViewer {    constructor(data) {
       this.originalData = data;
       this.filteredData = data;
       this.container = document.getElementById('json2table-table-container');
@@ -1298,7 +1341,9 @@
       this.modalOverlay = null;
       this.lastRenderTime = 0;
       this.renderThrottle = 16;
-    }    extractColumns(data) {
+      this.rafId = null; // For requestAnimationFrame scroll handling
+      this.boundScrollHandler = null; // Bound scroll handler reference
+    }extractColumns(data) {
       // Ensure data is an array
       if (!Array.isArray(data) || data.length === 0) {
         return [];
@@ -1311,51 +1356,50 @@
         }
       });
       return Array.from(columnSet);
-    }render() {
-      const now = performance.now();
-      if (now - this.lastRenderTime < this.renderThrottle) {
-        requestAnimationFrame(() => this.render());
-        return;
-      }
-      this.lastRenderTime = now;
-
-      const totalHeight = this.calculateDynamicHeight();
-      const { startIndex, endIndex } = this.calculateVisibleRange();
-
+    }    render() {
+      // Simple render - no virtual scrolling, just render all rows
       const html = `
-        <div style="height: ${totalHeight}px; position: relative;">
-          <div style="position: absolute; top: ${this.calculateOffsetTop(startIndex)}px; width: 100%;">
-            <table class="json2table-table">
-              <thead style="position: sticky; top: 0; z-index: 100; background: white;">
-                <tr>
-                  ${this.columns.map(col => `<th title="${col}">${this.formatColumnName(col)}</th>`).join('')}
-                </tr>
-              </thead>
-              <tbody>
-                ${this.renderRowsWithExpansions(startIndex, endIndex)}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <table class="json2table-table">
+          <thead style="position: sticky; top: 0; z-index: 1000; background: var(--header-bg); box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <tr>
+              ${this.columns.map(col => `<th title="${col}">${this.formatColumnName(col)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${this.renderAllRows()}
+          </tbody>
+        </table>
       `;
 
       this.container.innerHTML = html;
       this.attachOptimizedEventListeners();
-    }    calculateDynamicHeight() {
-      // Since expansions are now inline, we just need base row height times number of rows
-      return this.filteredData.length * this.rowHeight;
+    }    renderAllRows() {
+      // Simply render all rows without any virtual scrolling complexity
+      let html = '';
+      for (let i = 0; i < this.filteredData.length; i++) {
+        const row = this.filteredData[i];
+        html += this.renderMainRow(row, i);
+      }
+      return html;
+    }
+
+    calculateDynamicHeight() {
+      // Simplified: Use base row height for all rows, add expansion estimates
+      const baseHeight = this.filteredData.length * this.rowHeight;
+      const expansionHeight = this.expandedArrays.size * 100; // Estimate 100px per expansion
+      return baseHeight + expansionHeight;
     }    calculateVisibleRange() {
-      // Simplified calculation since expansions are inline
-      const startIndex = Math.floor(this.scrollTop / this.rowHeight);
-      const visibleCount = Math.ceil(window.innerHeight / this.rowHeight) + 5; // Buffer
-      const endIndex = Math.min(startIndex + visibleCount, this.filteredData.length);
+      // Simplified virtual scrolling calculation
+      const rowHeight = this.rowHeight;
+      const startIndex = Math.max(0, Math.floor(this.scrollTop / rowHeight) - 5);
+      const endIndex = Math.min(
+        this.filteredData.length,
+        startIndex + Math.ceil(window.innerHeight / rowHeight) + 10
+      );
       
-      return {
-        startIndex: Math.max(0, startIndex - 2), // Add buffer above
-        endIndex: Math.min(endIndex + 2, this.filteredData.length) // Add buffer below
-      };
+      return { startIndex, endIndex };
     }    calculateOffsetTop(startIndex) {
-      // Simplified calculation since expansions are inline
+      // Always use consistent calculation for smooth scrolling
       return startIndex * this.rowHeight;
     }renderRowsWithExpansions(startIndex, endIndex) {
       let html = '';
@@ -1365,11 +1409,9 @@
         html += this.renderMainRow(row, i);
       }
       return html;
-    }
-
-    renderMainRow(row, rowIndex) {
+    }    renderMainRow(row, rowIndex) {
       return `
-        <tr data-row-index="${rowIndex}" style="height: ${this.rowHeight}px;" class="main-row">
+        <tr data-row-index="${rowIndex}" class="main-row">
           ${this.columns.map(col => {
             const value = row[col];
             return `<td class="json2table-cell" data-col="${col}" data-row="${rowIndex}">
@@ -1618,15 +1660,14 @@
         return `<span title="${stringValue}">${stringValue.substring(0, 27)}...</span>`;
       }
       return stringValue;
-    }attachOptimizedEventListeners() {
+    }    attachOptimizedEventListeners() {
       // Single delegated event listener for maximum performance
       this.container.removeEventListener('click', this.handleTableClick);
       this.handleTableClick = this.handleTableClick.bind(this);
       this.container.addEventListener('click', this.handleTableClick);
       
-      // Optimized scroll handler with RAF
-      this.container.onscroll = this.throttledScrollHandler.bind(this);
-    }    handleTableClick(e) {
+      // No scroll handler needed since we're not using virtual scrolling
+    }handleTableClick(e) {
       // Handle array expansion/collapse badges
       const arrayBadge = e.target.closest('.expandable-array');
       if (arrayBadge) {
@@ -1655,15 +1696,14 @@
           this.showValueModal(value, `${col} (Row ${rowIndex + 1})`);
         }
       }
-    }toggleArrayExpansion(arrayKey) {
+    }    toggleArrayExpansion(arrayKey) {      
       if (this.expandedArrays.has(arrayKey)) {
         this.expandedArrays.delete(arrayKey);
       } else {
         this.expandedArrays.add(arrayKey);
       }
       
-      // Clear cache since row structure changed
-      this.renderCache.clear();
+      // Simple re-render without complex scroll handling
       this.render();
     }
 
@@ -1674,19 +1714,20 @@
         this.expandedArrays.add(objectKey);
       }
       
-      // Clear cache since row structure changed
-      this.renderCache.clear();
+      // Simple re-render without complex scroll handling
       this.render();
-    }
-
-    throttledScrollHandler(e) {
-      if (this.scrollTimeout) return;
+    }throttledScrollHandler(e) {
+      // Use requestAnimationFrame for smoother scrolling
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+      }
       
-      this.scrollTimeout = setTimeout(() => {
+      this.rafId = requestAnimationFrame(() => {
+        // Make sure we're getting the scroll position from the right element
         this.scrollTop = e.target.scrollTop;
         this.render();
-        this.scrollTimeout = null;
-      }, 16); // 60fps throttling
+        this.rafId = null;
+      });
     }
 
     formatColumnName(name) {
@@ -1799,10 +1840,8 @@
         this.performSearch(query);
       }
       
-      // Clear expansions and cache on new search
+      // Clear expansions on new search
       this.expandedArrays.clear();
-      this.renderCache.clear();
-      this.scrollTop = 0;
       this.render();
     }
 
@@ -1826,46 +1865,40 @@
       // Fallback to synchronous search if worker setup fails
       this.performSearch(query);
     }    expandAll() {
-      // Show progress for large datasets
-      if (this.filteredData.length > 1000) {
-        this.showTemporaryMessage('Expanding arrays... This may take a moment', 'info');
-      }
-      
-      // Use setTimeout to avoid blocking UI for large datasets
-      setTimeout(() => {        // Find all arrays and objects in the current filtered data and expand them
-        this.filteredData.forEach((row, rowIndex) => {
-          this.columns.forEach(col => {
-            const value = row[col];
-            
-            // Expand arrays
-            if (Array.isArray(value) && value.length > 0) {
-              const arrayKey = `${rowIndex}-${col}`;
-              this.expandedArrays.add(arrayKey);
-            }
-            
-            // Expand objects
-            if (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length > 0) {
-              const objectKey = `${rowIndex}-${col}-object`;
-              this.expandedArrays.add(objectKey);
-            }
-          });
+      // Find all arrays and objects in the current filtered data and expand them
+      this.filteredData.forEach((row, rowIndex) => {
+        this.columns.forEach(col => {
+          const value = row[col];
+          
+          // Expand arrays
+          if (Array.isArray(value) && value.length > 0) {
+            const arrayKey = `${rowIndex}-${col}`;
+            this.expandedArrays.add(arrayKey);
+          }
+          
+          // Expand objects
+          if (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length > 0) {
+            const objectKey = `${rowIndex}-${col}-object`;
+            this.expandedArrays.add(objectKey);
+          }
         });
-        
-        // Clear cache and re-render
-        this.renderCache.clear();
-        this.render();        // Show feedback
-        this.showTemporaryMessage(`✅ Expanded ${this.expandedArrays.size} arrays and objects - Scroll through the table to see all expanded data!`, 'success');
-      }, 50);
+      });
+      
+      // Simple re-render
+      this.render();
+      
+      // Show feedback
+      this.showTemporaryMessage(`✅ Expanded ${this.expandedArrays.size} arrays and objects`, 'success');
     }
 
     collapseAll() {
       const expandedCount = this.expandedArrays.size;
       this.expandedArrays.clear();
       
-      // Clear cache and re-render
-      this.renderCache.clear();
+      // Simple re-render
       this.render();
-        // Show feedback
+      
+      // Show feedback
       this.showTemporaryMessage(`Collapsed ${expandedCount} arrays and objects`, 'info');
     }
 
@@ -1924,7 +1957,26 @@
       a.click();
       
       URL.revokeObjectURL(url);
-    }  }
+    }    getRowHeight(rowIndex) {
+      // Simple consistent height for all rows
+      return this.rowHeight;
+    }
+
+    preserveScrollPosition() {
+      // Store current scroll position before render
+      if (this.container) {
+        this.scrollTop = this.container.scrollTop;
+      }
+    }
+
+    restoreScrollPosition() {
+      // Restore scroll position after render
+      if (this.container && this.scrollTop !== undefined) {
+        this.container.scrollTop = this.scrollTop;
+      }
+    }
+
+  }
 
   // Function to show table viewer in existing container or create new one
   function showTableViewer(tableData) {
