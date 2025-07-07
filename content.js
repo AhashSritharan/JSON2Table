@@ -275,19 +275,22 @@
           border-left: 3px solid var(--button-active);
           margin: 5px 0;
         }
-          /* Inline expansion styles */
-        .inline-array-expansion, .inline-object-expansion {
+          /* Inline expansion styles */        .inline-array-expansion, .inline-object-expansion {
           margin-top: 8px;
           padding: 8px;
           background: var(--expand-bg);
           border-radius: 4px;
           border-left: 3px solid var(--array-badge);
           font-size: 12px;
-          position: relative;
-          z-index: 1;
-        }
-        .inline-object-expansion {
+          /* Remove position: relative and z-index to prevent stacking context issues with image previews */
+        }        .inline-object-expansion {
           border-left-color: var(--object-badge);
+        }
+        
+        /* Ensure inline table containers don't interfere with image previews */
+        .inline-array-table-wrapper, .inline-object-table-wrapper, .inline-table {
+          position: static;
+          z-index: auto;
         }
         .inline-expansion-header {
           font-weight: 600;
@@ -439,13 +442,71 @@
           border-radius: 2px;
           font-weight: 600;
         }
-        
-        /* Dark mode search highlighting */
+          /* Dark mode search highlighting */
         @media (prefers-color-scheme: dark) {
           .search-highlight {
             background: #ffc107;
             color: #000;
           }
+        }        /* Image hover effects */
+        .hover-expandable {
+          position: relative;
+          transition: all 0.2s ease;
+        }
+        
+        .hover-expandable:hover {
+          transform: scale(1.05);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          border-color: #3b82f6 !important;
+        }        /* Image hover preview container */
+        .image-value-container {
+          /* Remove position: relative to avoid creating a stacking context */
+          display: inline-block;
+        }        .image-value-container .image-preview {
+          position: fixed;
+          background: rgba(0, 0, 0, 0.9);
+          border-radius: 8px;
+          padding: 10px;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+          z-index: 1000002;
+          pointer-events: none;
+          opacity: 0;
+          visibility: hidden;
+          transition: opacity 0.2s ease, visibility 0.2s ease;
+          top: var(--mouse-y, 50%);
+          left: var(--mouse-x, 50%);
+          transform: var(--preview-transform, translate(15px, -50%));
+          max-width: 400px;
+          max-height: 400px;
+        }
+        
+        .image-value-container .image-preview img {
+          max-width: 400px;
+          max-height: 400px;
+          border-radius: 4px;
+          display: block;
+        }
+        
+        .image-value-container .image-preview .preview-info {
+          color: white;
+          font-size: 12px;
+          margin-top: 8px;
+          text-align: center;
+          opacity: 0.8;
+        }
+        
+        .hover-expandable:hover + .image-preview,
+        .image-value-container:hover .image-preview {
+          opacity: 1;
+          visibility: visible;
+        }
+        
+        .image-hover-info {
+          color: white;
+          font-size: 12px;
+          text-align: center;
+          margin-top: 5px;
+          opacity: 0.8;
         }
       `;
       document.head.appendChild(style);      // Initialize table viewer
@@ -1738,9 +1799,7 @@
         ...row,
         __rowId: index // Stable identifier for expansions
       }));
-      this.filteredData = this.originalData;
-      
-      // Array expansion tracking
+      this.filteredData = this.originalData;      // Array expansion tracking
       this.expandedArrays = new Set(); // Track which arrays are expanded
       this.arrayRowHeights = new Map(); // Track additional height per expanded array
       this.renderCache = new Map();
@@ -2325,13 +2384,19 @@
           displayUrl = `Base64 ${format} (${Math.round(base64Data.length * 0.75 / 1024)}KB)`;
         }
       }
-        // Create a container with both the image and the URL
+      
+      // Generate unique ID for this image
+      const imageId = `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
       return `
         <div class="image-value-container" style="display: inline-flex; align-items: center; gap: 8px; width: fit-content;">
           <img 
+            id="${imageId}"
             src="${imageSrc}" 
             alt="Image" 
-            class="inline-image"
+            class="inline-image hover-expandable"
+            data-full-src="${imageSrc}"
+            data-display-url="${displayUrl}"
             style="
               max-width: 80px; 
               max-height: 60px; 
@@ -2343,8 +2408,11 @@
             "
             onclick="this.parentElement.querySelector('.image-url-display').style.display = this.parentElement.querySelector('.image-url-display').style.display === 'none' ? 'block' : 'none'"
             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-            title="Click to toggle URL display"
           />
+          <div class="image-preview">
+            <img src="${imageSrc}" alt="Enlarged image" onerror="this.parentElement.style.display='none';" />
+            <div class="preview-info">${displayUrl.length > 60 ? displayUrl.substring(0, 60) + '...' : displayUrl}</div>
+          </div>
           <div class="image-url-display" style="display: none; font-size: 11px; color: #6b7280; word-break: break-all;">
             ${this.highlightSearchTerm(displayUrl)}
           </div>
@@ -2353,13 +2421,16 @@
           </div>
         </div>
       `;
-    }
-
-    attachOptimizedEventListeners() {
+    }    attachOptimizedEventListeners() {
       // Single delegated event listener for maximum performance
       this.container.removeEventListener('click', this.handleTableClick);
       this.handleTableClick = this.handleTableClick.bind(this);
       this.container.addEventListener('click', this.handleTableClick);
+      
+      // Add mouse tracking for image preview positioning
+      this.container.removeEventListener('mousemove', this.handleMouseMove);
+      this.handleMouseMove = this.handleMouseMove.bind(this);
+      this.container.addEventListener('mousemove', this.handleMouseMove);
       
       // No scroll handler needed since we're not using virtual scrolling
     }
@@ -2429,10 +2500,38 @@
         this.render();
         this.rafId = null;
       });
+    }    formatColumnName(name) {
+      return name.split('.').pop().replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
     }
 
-    formatColumnName(name) {
-      return name.split('.').pop().replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+    handleMouseMove(e) {
+      // Update CSS variables for image preview positioning
+      // Only update if we're hovering over an image
+      if (e.target.classList && e.target.classList.contains('hover-expandable')) {
+        const mouseX = e.clientX;
+        const mouseY = e.clientY;
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        // Adjust position to keep preview on screen
+        let adjustedX = mouseX;
+        let adjustedY = mouseY;
+        
+        // If too close to right edge, show on left side of cursor
+        if (mouseX > windowWidth - 420) { // 400px preview width + 20px margin
+          adjustedX = mouseX;
+          document.documentElement.style.setProperty('--preview-transform', 'translate(-100%, -50%)');
+        } else {
+          document.documentElement.style.setProperty('--preview-transform', 'translate(15px, -50%)');
+        }
+        
+        // Keep some margin from edges
+        if (adjustedY < 50) adjustedY = 50;
+        if (adjustedY > windowHeight - 50) adjustedY = windowHeight - 50;
+        
+        document.documentElement.style.setProperty('--mouse-x', adjustedX + 'px');
+        document.documentElement.style.setProperty('--mouse-y', adjustedY + 'px');
+      }
     }
 
     showValueModal(value, title) {
