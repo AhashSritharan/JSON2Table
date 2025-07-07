@@ -161,8 +161,7 @@
               border-radius: 4px;
               cursor: pointer;
               font-size: 14px;
-            ">Expand All</button>
-            <button id="json2table-collapse-all" style="
+            ">Expand All</button>            <button id="json2table-collapse-all" style="
               padding: 6px 12px;
               background: var(--button-bg);
               color: var(--text-color);
@@ -171,6 +170,15 @@
               cursor: pointer;
               font-size: 14px;
             ">Collapse All</button>
+            <button id="json2table-toggle-view" style="
+              padding: 6px 12px;
+              background: #8b5cf6;
+              color: white;
+              border: 1px solid #8b5cf6;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 14px;
+            ">JSON View</button>
             <button id="json2table-export" style="
               padding: 6px 12px;
               background: var(--button-active);
@@ -180,12 +188,17 @@
               cursor: pointer;
               font-size: 14px;
             ">Export CSV</button>
-          </div>
-        </div>
+          </div>        </div>
         <div id="json2table-table-container" style="
           flex: 1;
           overflow: auto;
           background: var(--bg-color);
+        "></div>
+        <div id="json2table-json-container" style="
+          flex: 1;
+          overflow: auto;
+          background: var(--bg-color);
+          display: none;
         "></div>
       `;
 
@@ -219,10 +232,22 @@
         /* Apply minimum width only to cells with substantial content */
         .json2table-table td.wide-content {
           min-width: 200px;
-        }
-        .json2table-table tr:hover {
+        }        .json2table-table tr:hover {
           background: var(--hover-bg);
         }
+        
+        /* Button and input disabled states */
+        button:disabled {
+          background: #d1d5db !important;
+          color: #9ca3af !important;
+          cursor: not-allowed;
+        }
+        input:disabled {
+          background: #f3f4f6 !important;
+          color: #9ca3af !important;
+          cursor: not-allowed;
+        }
+        
         .expandable-array, .expandable-object {
           display: inline-block;
           padding: 2px 6px;
@@ -312,16 +337,10 @@
         .inline-table-row {
           border-bottom: 1px solid var(--border-color);
           background: var(--bg-color);
-        }
-        .inline-table-row:hover {
+        }        .inline-table-row:hover {
           background: var(--hover-bg);
         }
-        .inline-table-row:nth-child(even) {
-          background: var(--header-bg);
-        }
-        .inline-table-row:nth-child(even):hover {
-          background: var(--hover-bg);
-        }        .inline-table-cell {
+        .inline-table-cell {
           padding: 6px 8px;
           border-right: 1px solid var(--border-color);
           color: var(--text-color);
@@ -353,13 +372,17 @@
         }
         .inline-property-value, .inline-value {
           color: var(--text-color);
-        }
-          /* Style for table-based object property names */
+        }        /* Style for table-based object property names */
         .inline-table-cell.inline-property-name {
-          background: var(--header-bg);
+          background: var(--bg-color);
           font-weight: 600;
           color: var(--object-badge);
           /* Remove fixed width - let content determine size naturally */
+        }
+        
+        /* Ensure hover effect applies to entire row including property column */
+        .inline-table-row:hover .inline-table-cell.inline-property-name {
+          background: var(--hover-bg);
         }
         
         /* Apply smart width logic to object property value cells */
@@ -379,17 +402,15 @@
         }
         .boolean-value {
           font-weight: 600;
-        }
-        .boolean-value.true {
-          color: #059669;
+        }        .boolean-value.true {
+          color: #4caf50;
         }
         .boolean-value.false {
-          color: #dc2626;
-        }
-        .date-value {
-          color: #7c3aed;
+          color: #ff5252;
+        }        .date-value {
+          color: #9c27b0;
           font-weight: 500;
-        }        .nested-array, .nested-object {
+        }.nested-array, .nested-object {
           color: #64748b;
           background: var(--button-bg);
           padding: 1px 4px;
@@ -439,14 +460,159 @@
             tableViewer.expandAll();
           }, 100);
         }
-      });
-
-      // Event listeners
+      });      // Event listeners
       document.getElementById('json2table-search').oninput = (e) => tableViewer.search(e.target.value);
       document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
       document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
+      document.getElementById('json2table-toggle-view').onclick = () => this.toggleView(tableData);
       document.getElementById('json2table-export').onclick = () => tableViewer.exportCSV();
-    }    static async getSettings() {
+    }
+
+    // Toggle view functionality for auto-converted interface
+    static toggleView(jsonData) {
+      const tableContainer = document.getElementById('json2table-table-container');
+      const jsonContainer = document.getElementById('json2table-json-container');
+      const toggleButton = document.getElementById('json2table-toggle-view');
+      const searchInput = document.getElementById('json2table-search');
+      const expandButton = document.getElementById('json2table-expand-all');
+      const collapseButton = document.getElementById('json2table-collapse-all');
+
+      if (!tableContainer || !jsonContainer) return;
+
+      const isJsonView = jsonContainer.style.display !== 'none';
+
+      if (!isJsonView) {
+        // Switch to JSON view
+        tableContainer.style.display = 'none';
+        jsonContainer.style.display = 'block';
+        toggleButton.textContent = 'Table View';
+        
+        // Disable table-specific controls
+        if (searchInput) searchInput.disabled = true;
+        if (expandButton) expandButton.disabled = true;
+        if (collapseButton) collapseButton.disabled = true;
+        
+        // Render formatted JSON with syntax highlighting
+        const formattedJson = JSON.stringify(jsonData, null, 2);
+        jsonContainer.innerHTML = `
+          <div style="
+            padding: 20px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            background: var(--bg-color);
+            height: 100%;
+            overflow: auto;
+          ">
+            <div style="
+              padding: 16px 20px;
+              border-bottom: 1px solid var(--border-color);
+              background: var(--header-bg);
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-radius: 4px 4px 0 0;
+              margin: -20px -20px 20px -20px;
+            ">
+              <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-color);">
+                Formatted JSON Data (${jsonData.length} items)
+              </h3>
+              <button onclick="AutoJSONDetector.copyJsonToClipboard()" style="
+                padding: 6px 12px;
+                background: var(--button-active);
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: 500;
+              ">Copy JSON</button>
+            </div>
+            <pre style="
+              margin: 0;
+              white-space: pre-wrap;
+              color: var(--text-color);
+              background: var(--bg-color);
+            ">${this.syntaxHighlightJson(formattedJson)}</pre>
+          </div>
+        `;
+        
+        // Store JSON data for copying
+        window.currentJsonData = formattedJson;
+      } else {
+        // Switch to table view
+        tableContainer.style.display = 'block';
+        jsonContainer.style.display = 'none';
+        toggleButton.textContent = 'JSON View';
+        
+        // Re-enable table-specific controls
+        if (searchInput) searchInput.disabled = false;
+        if (expandButton) expandButton.disabled = false;
+        if (collapseButton) collapseButton.disabled = false;
+      }
+    }
+
+    // Syntax highlighting for JSON
+    static syntaxHighlightJson(json) {
+      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let cls = 'number';
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            cls = 'key';
+          } else {
+            cls = 'string';
+          }
+        } else if (/true|false/.test(match)) {
+          cls = 'boolean';
+        } else if (/null/.test(match)) {
+          cls = 'null';
+        }
+        return '<span style="color: ' + this.getJsonColor(cls) + '">' + match + '</span>';
+      }.bind(this));
+    }    // Get colors for JSON syntax highlighting
+    static getJsonColor(type) {
+      // Check if we're in dark mode
+      const isDarkMode = document.documentElement.style.getPropertyValue('--bg-color') === '#121212' ||
+                        window.matchMedia('(prefers-color-scheme: dark)').matches;
+      
+      const lightColors = {
+        string: '#4caf50',   // Material Green
+        number: '#ff5252',   // Material Red
+        boolean: '#9c27b0',  // Material Purple
+        null: '#757575',     // Material secondary text
+        key: '#2196f3'       // Material Blue
+      };
+      
+      const darkColors = {
+        string: '#4caf50',   // Material Green (consistent across themes)
+        number: '#ff5252',   // Material Red (consistent across themes)
+        boolean: '#9c27b0',  // Material Purple (consistent across themes)
+        null: '#b0b0b0',     // Material secondary text on dark
+        key: '#2196f3'       // Material Blue (consistent across themes)
+      };
+      
+      const colors = isDarkMode ? darkColors : lightColors;
+      return colors[type] || (isDarkMode ? '#e0e0e0' : '#212121');
+    }
+
+    // Copy JSON to clipboard
+    static copyJsonToClipboard() {
+      if (window.currentJsonData) {
+        navigator.clipboard.writeText(window.currentJsonData).then(() => {
+          const btn = event.target;
+          const originalText = btn.textContent;
+          btn.textContent = 'Copied!';
+          btn.style.background = '#10b981';
+          setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = 'var(--button-active)';
+          }, 2000);
+        }).catch(err => {
+          console.error('Failed to copy: ', err);
+        });
+      }
+    }static async getSettings() {
       return new Promise((resolve) => {
         chrome.storage.local.get(['autoConvert', 'autoExpand', 'themeOverride'], (result) => {
           resolve({
@@ -471,68 +637,85 @@
             themeCSS = `
               :root {
                 --bg-color: #ffffff;
-                --text-color: #333333;
-                --border-color: #e1e5e9;
-                --header-bg: #f8f9fa;
+                --text-color: #212121;
+                --border-color: #e0e0e0;
+                --header-bg: #f5f5f5;
                 --hover-bg: #f5f5f5;
                 --button-bg: #ffffff;
-                --button-border: #dee2e6;
-                --button-active: #007bff;
-                --expand-bg: #e3f2fd;
+                --button-border: #e0e0e0;
+                --button-active: #2196f3;
+                --expand-bg: #ffffff;
                 --array-badge: #9c27b0;
                 --object-badge: #2196f3;
-                --muted-text: #9ca3af;
+                --muted-text: #757575;
+                --json-string-color: #4caf50;
+                --json-number-color: #ff5252;
+                --json-boolean-color: #9c27b0;
+                --json-null-color: #757575;
+                --json-key-color: #2196f3;
               }
             `;
-            break;          case 'force_dark':
-            themeCSS = `
+            break;case 'force_dark':            themeCSS = `
               :root {
-                --bg-color: #1a1a1a;
-                --text-color: #eeeeeee;
-                --border-color: #404040;
-                --header-bg: #2a2a2a;
-                --hover-bg: #333333;
-                --button-bg: #2a2a2a;
-                --button-border: #404040;
-                --button-active: #4dabf7;
-                --expand-bg: #1e3a5f;
-                --array-badge: #ba68c8;
-                --object-badge: #64b5f6;
-                --muted-text: #71717a;
+                --bg-color: #121212;
+                --text-color: #e0e0e0;
+                --border-color: #444444;
+                --header-bg: #1e1e1e;
+                --hover-bg: #2c2c2c;
+                --button-bg: #1e1e1e;
+                --button-border: #444444;
+                --button-active: #2196f3;
+                --expand-bg: #121212;
+                --array-badge: #9c27b0;
+                --object-badge: #2196f3;
+                --muted-text: #b0b0b0;
+                --json-string-color: #4caf50;
+                --json-number-color: #ff5252;
+                --json-boolean-color: #9c27b0;
+                --json-null-color: #b0b0b0;
+                --json-key-color: #2196f3;
               }
             `;
-            break;          case 'system':
-          default:
-            themeCSS = `
-              :root {
+            break;case 'system':
+          default:            themeCSS = `              :root {
                 --bg-color: #ffffff;
-                --text-color: #333333;
-                --border-color: #e1e5e9;
-                --header-bg: #f8f9fa;
+                --text-color: #212121;
+                --border-color: #e0e0e0;
+                --header-bg: #f5f5f5;
                 --hover-bg: #f5f5f5;
                 --button-bg: #ffffff;
-                --button-border: #dee2e6;
-                --button-active: #007bff;
-                --expand-bg: #e3f2fd;
+                --button-border: #e0e0e0;
+                --button-active: #2196f3;
+                --expand-bg: #ffffff;
                 --array-badge: #9c27b0;
                 --object-badge: #2196f3;
-                --muted-text: #9ca3af;
+                --muted-text: #757575;
+                --json-string-color: #4caf50;
+                --json-number-color: #ff5252;
+                --json-boolean-color: #9c27b0;
+                --json-null-color: #757575;
+                --json-key-color: #2196f3;
               }
               
               @media (prefers-color-scheme: dark) {
                 :root {
-                  --bg-color: #1a1a1a;
-                  --text-color: #eeeeee;
-                  --border-color: #404040;
-                  --header-bg: #2a2a2a;
-                  --hover-bg: #333333;
-                  --button-bg: #2a2a2a;
-                  --button-border: #404040;
-                  --button-active: #4dabf7;
-                  --expand-bg: #1e3a5f;
-                  --array-badge: #ba68c8;
-                  --object-badge: #64b5f6;
-                  --muted-text: #71717a;
+                  --bg-color: #121212;
+                  --text-color: #e0e0e0;
+                  --border-color: #444444;
+                  --header-bg: #1e1e1e;
+                  --hover-bg: #2c2c2c;
+                  --button-bg: #1e1e1e;
+                  --button-border: #444444;
+                  --button-active: #2196f3;
+                  --expand-bg: #121212;
+                  --array-badge: #9c27b0;
+                  --object-badge: #2196f3;
+                  --muted-text: #b0b0b0;
+                  --json-string-color: #4caf50;
+                  --json-number-color: #ff5252;
+                  --json-boolean-color: #9c27b0;
+                  --json-null-color: #b0b0b0;
+                  --json-key-color: #2196f3;
                 }
               }
             `;
@@ -806,12 +989,13 @@
               <input type="text" id="json2table-search" placeholder="Search..." />
               <button id="json2table-expand-all">Expand All</button>
               <button id="json2table-collapse-all">Collapse All</button>
+              <button id="json2table-toggle-view">JSON View</button>
               <button id="json2table-export">Export CSV</button>
               <button id="json2table-close">✕</button>
             </div>
-          </div>
-          <div class="json2table-content">
+          </div>          <div class="json2table-content">
             <div id="json2table-table-container"></div>
+            <div id="json2table-json-container" style="display: none;"></div>
           </div>
         </div>
       </div>
@@ -874,6 +1058,17 @@
         font-size: 14px;
         font-weight: 500;
         margin-left: 8px;
+        transition: background 0.15s ease;
+      }
+      .json2table-controls button:disabled {
+        background: #d1d5db !important;
+        color: #9ca3af !important;
+        cursor: not-allowed;
+      }
+      .json2table-controls input:disabled {
+        background: #f3f4f6;
+        color: #9ca3af;
+        cursor: not-allowed;
       }
       #json2table-expand-all {
         background: #10b981;
@@ -885,9 +1080,15 @@
       #json2table-collapse-all {
         background: #f59e0b;
         color: white;
-      }
-      #json2table-collapse-all:hover {
+      }      #json2table-collapse-all:hover {
         background: #d97706;
+      }
+      #json2table-toggle-view {
+        background: #8b5cf6;
+        color: white;
+      }
+      #json2table-toggle-view:hover {
+        background: #7c3aed;
       }
       #json2table-export {
         background: #2563eb;
@@ -911,14 +1112,77 @@
         padding: 20px;
         display: flex;
         flex-direction: column;
-      }
-      #json2table-table-container {
+      }      #json2table-table-container {
         flex: 1;
         overflow: auto;
         border: 1px solid #e5e7eb;
         border-radius: 4px;
         min-height: 0; /* Critical for flex scrolling */
       }
+      #json2table-json-container {
+        flex: 1;
+        overflow: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        min-height: 0;
+        background: #f8f9fa;
+        padding: 20px;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 14px;
+        line-height: 1.6;
+      }      .json-content {
+        white-space: pre-wrap;
+        color: #333;
+        background: white;
+        padding: 0;
+        border-radius: 4px;
+        border: 1px solid #e5e7eb;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      .json-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f8f9fa;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-radius: 4px 4px 0 0;
+      }
+      .json-header h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #374151;
+      }
+      .copy-json-btn {
+        padding: 6px 12px;
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .copy-json-btn:hover {
+        background: #1d4ed8;
+      }
+      .json-code {
+        flex: 1;
+        padding: 20px;
+        margin: 0;
+        overflow: auto;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        background: white;
+      }      .json-string { color: var(--json-string-color, #059669); }
+      .json-number { color: var(--json-number-color, #dc2626); }
+      .json-boolean { color: var(--json-boolean-color, #7c3aed); font-weight: 600; }
+      .json-null { color: var(--json-null-color, #9ca3af); font-style: italic; }
+      .json-key { color: var(--json-key-color, #1d4ed8); font-weight: 600; }
       .json2table-table {
         width: 100%;
         border-collapse: collapse;
@@ -940,14 +1204,8 @@
         border-bottom: 1px solid #f3f4f6;
         white-space: nowrap;
         vertical-align: top;
-      }
-      .json2table-table tr:hover {
+      }      .json2table-table tr:hover {
         background: #f9fafb;
-      }
-      .json2table-table tr:nth-child(even) {
-        background: #f8fafc;
-      }      .json2table-table tr:nth-child(even):hover {
-        background: #f1f5f9;
       }
       .clickable {
         cursor: pointer;
@@ -1062,12 +1320,8 @@
       .array-index-col {
         width: 40px;
         text-align: center;
-      }
-      .array-column-header {
+      }      .array-column-header {
         min-width: 80px;
-      }
-      .array-sub-row:nth-child(even) {
-        background: #f8fafc;
       }
       .array-sub-row:hover {
         background: #e2e8f0;
@@ -1122,10 +1376,9 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-      }
-      .object-table-title {
+      }      .object-table-title {
         font-weight: 600;
-        color: #1e40af;
+        color: #1d4ed8;
         font-size: 12px;
       }
       .collapse-object-btn {
@@ -1165,24 +1418,19 @@
       }
       .object-value-col {
         width: 55%;
-      }
-      .object-type-col {
+      }      .object-type-col {
         width: 15%;
         text-align: center;
       }
-      .object-sub-row:nth-child(even) {
-        background: #f8fafc;
-      }
       .object-sub-row:hover {
         background: #e0f2fe;
-      }
-      .object-property-cell {
+      }      .object-property-cell {
         padding: 6px 8px;
         font-weight: 600;
-        color: #1e40af;
+        color: #1d4ed8;
         font-size: 11px;
         border-bottom: 1px solid #f1f5f9;
-      }      .object-value-cell {
+      }.object-value-cell {
         padding: 6px 8px;
         border-bottom: 1px solid #f1f5f9;
         white-space: nowrap;
@@ -1380,14 +1628,98 @@
           tableViewer.expandAll();
         }, 100);
       }
-    });
-
-    // Event listeners
+    });    // Event listeners
     document.getElementById('json2table-close').onclick = () => viewer.remove();
     document.getElementById('json2table-search').oninput = (e) => tableViewer.search(e.target.value);
     document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
     document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
+    document.getElementById('json2table-toggle-view').onclick = () => toggleView(data);
     document.getElementById('json2table-export').onclick = () => tableViewer.exportCSV();
+
+    // Toggle view functionality
+    let isJsonView = false;
+    function toggleView(jsonData) {
+      const tableContainer = document.getElementById('json2table-table-container');
+      const jsonContainer = document.getElementById('json2table-json-container');
+      const toggleButton = document.getElementById('json2table-toggle-view');
+      const searchInput = document.getElementById('json2table-search');
+      const expandButton = document.getElementById('json2table-expand-all');
+      const collapseButton = document.getElementById('json2table-collapse-all');
+
+      if (!isJsonView) {
+        // Switch to JSON view
+        tableContainer.style.display = 'none';
+        jsonContainer.style.display = 'block';
+        toggleButton.textContent = 'Table View';
+        
+        // Disable table-specific controls
+        searchInput.disabled = true;
+        expandButton.disabled = true;
+        collapseButton.disabled = true;        // Render formatted JSON with syntax highlighting
+        const formattedJson = JSON.stringify(jsonData, null, 2);
+        jsonContainer.innerHTML = `
+          <div class="json-content">
+            <div class="json-header">
+              <h3>Formatted JSON Data (${jsonData.length} items)</h3>
+              <button class="copy-json-btn" onclick="copyJsonToClipboard()">Copy JSON</button>
+            </div>
+            <pre class="json-code">${syntaxHighlightJson(formattedJson)}</pre>
+          </div>
+        `;
+        
+        // Store JSON data for copying
+        window.currentJsonData = formattedJson;
+        
+        isJsonView = true;
+      } else {
+        // Switch to table view
+        tableContainer.style.display = 'block';
+        jsonContainer.style.display = 'none';
+        toggleButton.textContent = 'JSON View';
+        
+        // Re-enable table-specific controls
+        searchInput.disabled = false;
+        expandButton.disabled = false;
+        collapseButton.disabled = false;
+          isJsonView = false;
+      }
+    }    // Syntax highlighting for JSON
+    function syntaxHighlightJson(json) {
+      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let cls = 'number';
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            cls = 'key';
+          } else {
+            cls = 'string';
+          }
+        } else if (/true|false/.test(match)) {
+          cls = 'boolean';
+        } else if (/null/.test(match)) {
+          cls = 'null';
+        }
+        return '<span class="json-' + cls + '">' + match + '</span>';
+      });
+    }
+
+    // Copy JSON to clipboard
+    window.copyJsonToClipboard = function() {
+      if (window.currentJsonData) {
+        navigator.clipboard.writeText(window.currentJsonData).then(() => {
+          const btn = document.querySelector('.copy-json-btn');
+          const originalText = btn.textContent;
+          btn.textContent = 'Copied!';
+          btn.style.background = '#10b981';
+          setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = '#2563eb';
+          }, 2000);
+        }).catch(err => {
+          console.error('Failed to copy: ', err);
+        });
+      }
+    };
   }
 
   // Ultra-high-performance table viewer with expandable arrays
