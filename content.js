@@ -1511,21 +1511,21 @@
               ${cellContent}
             </td>`;
           }).join('')}
-        </tr>
-      `;
-    }
-
-    shouldUseWideContent(value, cellContent) {
+        </tr>      `;
+    }    shouldUseWideContent(value, cellContent, context = 'main-table') {
       // Single digits, booleans, short numbers don't need wide columns
       if (typeof value === 'number' && Math.abs(value) < 1000) return false;
       if (typeof value === 'boolean') return false;
-      if (value === null || value === undefined) return false;
-      
-      // Arrays and objects always need wide content for expansion
-      if (Array.isArray(value) || (typeof value === 'object' && value !== null)) return true;
+      if (value === null || value === undefined) return false;        // Arrays and objects don't need wide content for expansion
+      // since they have their own inline expansion mechanism
+      if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+        return false; // No wide content for any expandable content
+      }
       
       // String content - check length
       if (typeof value === 'string') {
+        // Check if this string is an image URL - images don't need wide columns
+        if (this.isImageUrl(value)) return false;
         // Short strings (like IDs, status, single words) don't need wide columns
         if (value.length <= 10) return false;
         // Medium strings might need some width
@@ -1537,6 +1537,8 @@
       // For rendered HTML content, check if it contains expansion elements
       if (typeof cellContent === 'string') {
         if (cellContent.includes('expandable-array') || cellContent.includes('expandable-object')) return true;
+        // Check if this is image content - images don't need wide columns since they're constrained to 60px
+        if (cellContent.includes('image-value-container') || cellContent.includes('inline-image')) return false;
         // Long rendered content
         if (cellContent.length > 50) return true;
       }
@@ -1697,11 +1699,9 @@
                             const cellValue = item[acol];
                             return `<td class="inline-table-cell">${cellValue !== undefined ? this.highlightSearchTerm(this.formatArrayCellValue(cellValue)) : '<span class="null-value">-</span>'}</td>`;
                           }).join('')}
-                        </tr>`;
-                      } else {
+                        </tr>`;                      } else {
                         return `<tr class="inline-table-row">
                           <td class="inline-table-cell" colspan="${arrayColumns.length}">
-                            <span class="inline-item-index">${itemIndex + 1}.</span>
                             <span class="inline-value">${this.highlightSearchTerm(this.formatInlineValue(item))}</span>
                           </td>
                         </tr>`;
@@ -1740,8 +1740,8 @@
                       <th>Value</th>
                     </tr>
                   </thead>                  <tbody>                    ${Object.entries(value).map(([key, val]) => {
-                      // Determine if this property value needs wide content class
-                      const isWideContent = this.shouldUseWideContent(val, null);
+                      // Determine if this property value needs wide content class (inline context)
+                      const isWideContent = this.shouldUseWideContent(val, null, 'inline-table');
                       const widthClass = isWideContent ? ' wide-content' : '';
                       
                       return `<tr class="inline-table-row">
@@ -1801,11 +1801,9 @@
                               const cellValue = item[acol];
                               return `<td class="inline-table-cell">${cellValue !== undefined ? this.formatArrayCellValue(cellValue) : '<span class="null-value">-</span>'}</td>`;
                             }).join('')}
-                          </tr>`;
-                        } else {
+                          </tr>`;                        } else {
                           return `<tr class="inline-table-row">
                             <td class="inline-table-cell" colspan="${arrayColumns.length}">
-                              <span class="inline-item-index">${itemIndex + 1}.</span>
                               <span class="inline-value">${this.formatInlineValue(item)}</span>
                             </td>
                           </tr>`;
@@ -1849,8 +1847,8 @@
                       </tr>
                     </thead>                    <tbody>
                       ${Object.entries(value).map(([key, val]) => {
-                        // Apply smart width logic to nested object property values
-                        const isWideContent = this.shouldUseWideContent(val, null);
+                        // Apply smart width logic to nested object property values (inline context)
+                        const isWideContent = this.shouldUseWideContent(val, null, 'inline-table');
                         const widthClass = isWideContent ? ' wide-content' : '';
                         
                         return `<tr class="inline-table-row">
@@ -1995,10 +1993,9 @@
           displayUrl = `Base64 ${format} (${Math.round(base64Data.length * 0.75 / 1024)}KB)`;
         }
       }
-      
-      // Create a container with both the image and the URL
+        // Create a container with both the image and the URL
       return `
-        <div class="image-value-container" style="display: flex; align-items: center; gap: 8px;">
+        <div class="image-value-container" style="display: inline-flex; align-items: center; gap: 8px; width: fit-content;">
           <img 
             src="${imageSrc}" 
             alt="Image" 
@@ -2010,6 +2007,7 @@
               border: 1px solid #e5e7eb;
               object-fit: cover;
               cursor: pointer;
+              flex-shrink: 0;
             "
             onclick="this.parentElement.querySelector('.image-url-display').style.display = this.parentElement.querySelector('.image-url-display').style.display === 'none' ? 'block' : 'none'"
             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
