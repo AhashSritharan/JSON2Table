@@ -1755,9 +1755,14 @@
             </div>`;
         }
         
-        return html;
-      }
+        return html;      }
         const stringValue = String(value);
+      
+      // Check if the string value is an image URL
+      if (this.isImageUrl(stringValue)) {
+        return this.renderImageValue(stringValue);
+      }
+      
       // Apply search highlighting to the value
       return this.highlightSearchTerm(stringValue);
     }
@@ -1902,12 +1907,18 @@
           return `<span class="date-value">${date.toLocaleDateString()}</span>`;
         } catch (e) {
           // Fall through to regular formatting
-        }
-      }
+        }      }
       
-      // Truncate very long strings
-      if (typeof value === 'string' && value.length > 50) {
-        return value.substring(0, 50) + '...';
+      // Truncate very long strings (but check for images first)
+      if (typeof value === 'string') {
+        // Check if it's an image URL first
+        if (this.isImageUrl(value)) {
+          return this.renderImageValue(value);
+        }
+        // Then check for length truncation
+        if (value.length > 50) {
+          return value.substring(0, 50) + '...';
+        }
       }
         const stringValue = String(value);
       // Return full string for complete text selection
@@ -1925,11 +1936,93 @@
       
       // Replace matches with highlighted spans
       return text.replace(regex, '<mark class="search-highlight">$1</mark>');
-    }
-
-    escapeRegex(string) {
+    }    escapeRegex(string) {
       // Escape special regex characters
       return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }    isImageUrl(url) {
+      // Check if the URL string looks like an image
+      if (typeof url !== 'string') return false;
+      
+      // Check for base64 encoded images
+      if (/^data:image\/(jpeg|jpg|png|gif|webp|svg\+xml|bmp);base64,/i.test(url)) {
+        return true;
+      }
+      
+      // Check for base64 strings that might be images (common JPEG header)
+      if (/^\/9j\//.test(url) || /^iVBORw0KGgo/.test(url) || /^R0lGOD/.test(url)) {
+        return true;
+      }
+      
+      // Must be a valid URL pattern for regular URLs
+      if (!/^https?:\/\/.+/i.test(url)) return false;
+      
+      // Check for image file extensions
+      const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i;
+      if (imageExtensions.test(url)) return true;
+      
+      // Check for common image hosting patterns
+      const imageHostPatterns = [
+        /cdn\..*\.(jpg|jpeg|png|gif|webp|svg)/i,
+        /images?\./i,
+        /img\./i,
+        /photo/i,
+        /picture/i,
+        /thumbnail/i,
+        /avatar/i
+      ];
+      
+      return imageHostPatterns.some(pattern => pattern.test(url));
+    }    renderImageValue(imageUrl) {
+      // Determine if it's a base64 image and format the src accordingly
+      let imageSrc = imageUrl;
+      let displayUrl = imageUrl;
+      
+      // Handle base64 images that don't have data: prefix
+      if (/^\/9j\//.test(imageUrl) || /^iVBORw0KGgo/.test(imageUrl) || /^R0lGOD/.test(imageUrl)) {
+        // Common base64 image headers - add data URI prefix
+        let mimeType = 'jpeg'; // Default
+        if (/^iVBORw0KGgo/.test(imageUrl)) mimeType = 'png';
+        if (/^R0lGOD/.test(imageUrl)) mimeType = 'gif';
+        
+        imageSrc = `data:image/${mimeType};base64,${imageUrl}`;
+        displayUrl = `Base64 ${mimeType.toUpperCase()} (${Math.round(imageUrl.length * 0.75 / 1024)}KB)`;
+      } else if (/^data:image/.test(imageUrl)) {
+        // Already has data: prefix, extract info for display
+        const match = imageUrl.match(/^data:image\/([^;]+);base64,(.+)$/);
+        if (match) {
+          const format = match[1].toUpperCase();
+          const base64Data = match[2];
+          displayUrl = `Base64 ${format} (${Math.round(base64Data.length * 0.75 / 1024)}KB)`;
+        }
+      }
+      
+      // Create a container with both the image and the URL
+      return `
+        <div class="image-value-container" style="display: flex; align-items: center; gap: 8px;">
+          <img 
+            src="${imageSrc}" 
+            alt="Image" 
+            class="inline-image"
+            style="
+              max-width: 80px; 
+              max-height: 60px; 
+              border-radius: 4px; 
+              border: 1px solid #e5e7eb;
+              object-fit: cover;
+              cursor: pointer;
+            "
+            onclick="this.parentElement.querySelector('.image-url-display').style.display = this.parentElement.querySelector('.image-url-display').style.display === 'none' ? 'block' : 'none'"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+            title="Click to toggle URL display"
+          />
+          <div class="image-url-display" style="display: none; font-size: 11px; color: #6b7280; word-break: break-all;">
+            ${this.highlightSearchTerm(displayUrl)}
+          </div>
+          <div class="image-fallback" style="display: none; font-size: 11px; color: #ef4444;">
+            ${this.highlightSearchTerm(displayUrl)}
+          </div>
+        </div>
+      `;
     }
 
     attachOptimizedEventListeners() {
