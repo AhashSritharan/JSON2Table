@@ -2154,14 +2154,10 @@
         this.columns.forEach(col => {
           const value = row[col];
           this.expandAllNested(value, stableRowId, col, '');
-        });
-      });
+        });      });
       
       // Simple re-render
       this.render();
-      
-      // Show feedback
-      this.showTemporaryMessage(`✅ Expanded ${this.expandedArrays.size} arrays and objects`, 'success');
     }
 
     expandAllNested(value, rowIndex, col, nestedPath) {
@@ -2192,17 +2188,12 @@
           this.expandAllNested(nestedValue, rowIndex, col, newPath);
         });
       }
-    }
-
-    collapseAll() {
+    }    collapseAll() {
       const expandedCount = this.expandedArrays.size;
       this.expandedArrays.clear();
       
       // Simple re-render
       this.render();
-      
-      // Show feedback
-      this.showTemporaryMessage(`Collapsed ${expandedCount} arrays and objects`, 'info');
     }
 
     showTemporaryMessage(message, type = 'info') {
