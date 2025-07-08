@@ -948,7 +948,6 @@ class TableViewer {
     // Simple re-render
     this.render();
   }
-
   exportCSV() {
     const headers = this.columns.join(',');
     const rows = this.filteredData.map(row =>
@@ -956,10 +955,9 @@ class TableViewer {
         const value = row[col] || '';
         let csvValue = '';
         
-        if (Array.isArray(value)) {
-          csvValue = `"[${value.length} items]"`;
-        } else if (typeof value === 'object' && value !== null) {
-          csvValue = `"{${Object.keys(value).length} properties}"`;
+        if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+          // Convert arrays and objects to JSON string format
+          csvValue = `"${JSON.stringify(value).replace(/"/g, '""')}"`;
         } else {
           csvValue = `"${String(value).replace(/"/g, '""')}"`;
         }

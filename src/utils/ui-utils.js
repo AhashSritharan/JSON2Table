@@ -174,8 +174,7 @@ class UIUtils {
             border-radius: 4px;
             cursor: pointer;
             font-size: 14px;
-          ">Collapse All</button>
-          <button id="json2table-toggle-view" style="
+          ">Collapse All</button>          <button id="json2table-toggle-view" style="
             padding: 6px 12px;
             background: #8b5cf6;
             color: white;
@@ -183,16 +182,20 @@ class UIUtils {
             border-radius: 4px;
             cursor: pointer;
             font-size: 14px;
-          ">JSON View</button>
-          <button id="json2table-export" style="
-            padding: 6px 12px;
-            background: var(--button-active);
-            color: white;
-            border: 1px solid var(--button-active);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-          ">Export CSV</button>
+          ">JSON View</button>          <div id="json2table-export-dropdown" style="position: relative; display: inline-block;">
+            <button id="json2table-export" style="
+              padding: 6px 12px;
+              background: var(--button-active);
+              color: white;
+              border: 1px solid var(--button-active);
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 14px;
+              display: flex;
+              align-items: center;
+              gap: 4px;
+            ">Export <span style="font-size: 10px;">▼</span></button>
+          </div>
         </div>
       </div>
       <div id="json2table-table-container" style="
@@ -223,16 +226,143 @@ class UIUtils {
           tableViewer.expandAll();
         }, 100);
       }
-    });
-
-    // Event listeners
+    });    // Event listeners
     document.getElementById('json2table-search').oninput = (e) => tableViewer.search(e.target.value);
     document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
     document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
     // Use original JSON if available, otherwise fall back to table data
     const jsonForView = originalJson || tableData;
-    document.getElementById('json2table-toggle-view').onclick = () => this.toggleView(jsonForView);
-    document.getElementById('json2table-export').onclick = () => tableViewer.exportCSV();
+    document.getElementById('json2table-toggle-view').onclick = () => this.toggleView(jsonForView);      // Export dropdown functionality
+    const exportButton = document.getElementById('json2table-export');
+    
+    // Create dropdown menu and append to body to escape stacking context
+    const exportMenu = document.createElement('div');
+    exportMenu.id = 'json2table-export-menu';    exportMenu.style.cssText = `
+      position: fixed;
+      background: var(--bg-color);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000002;
+      display: none;
+      width: auto;
+      min-width: 80px;
+      pointer-events: auto;
+      overflow: hidden;
+    `;      exportMenu.innerHTML = `
+      <button id="json2table-export-csv" style="
+        padding: 8px 16px;
+        background: none;
+        border: none;
+        text-align: left;
+        cursor: pointer;
+        font-size: 14px;
+        color: var(--text-color);
+        transition: background-color 0.2s;
+        line-height: 1.2;
+        margin: 0;
+        white-space: nowrap;
+        display: block;
+        width: 100%;
+      ">CSV</button>
+      <button id="json2table-export-json" style="
+        padding: 8px 16px;
+        background: none;
+        border: none;
+        text-align: left;
+        cursor: pointer;
+        font-size: 14px;
+        color: var(--text-color);
+        transition: background-color 0.2s;
+        border-top: 1px solid var(--border-color);
+        line-height: 1.2;
+        margin: 0;
+        white-space: nowrap;
+        display: block;
+        width: 100%;
+      ">JSON</button>
+    `;
+    
+    document.body.appendChild(exportMenu);
+    
+    const exportCsvBtn = document.getElementById('json2table-export-csv');
+    const exportJsonBtn = document.getElementById('json2table-export-json');
+    
+    // Toggle dropdown
+    exportButton.onclick = (e) => {
+      e.stopPropagation();
+      const isVisible = exportMenu.style.display === 'block';
+      
+      if (!isVisible) {
+        // Show dropdown to measure its dimensions
+        exportMenu.style.display = 'block';
+        exportMenu.style.visibility = 'hidden';
+        
+        // Get button and dropdown dimensions
+        const buttonRect = exportButton.getBoundingClientRect();
+        const menuRect = exportMenu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Calculate initial position
+        let top = buttonRect.bottom + 2;
+        let left = buttonRect.left;
+        
+        // Check if dropdown extends beyond right edge of viewport
+        if (left + menuRect.width > viewportWidth) {
+          // Position to the left of the button instead
+          left = buttonRect.right - menuRect.width;
+        }
+        
+        // Check if dropdown extends beyond bottom edge of viewport
+        if (top + menuRect.height > viewportHeight) {
+          // Position above the button instead
+          top = buttonRect.top - menuRect.height - 2;
+        }
+        
+        // Ensure dropdown doesn't go beyond left edge
+        if (left < 0) {
+          left = 8; // Small margin from left edge
+        }
+        
+        // Ensure dropdown doesn't go beyond top edge
+        if (top < 0) {
+          top = 8; // Small margin from top edge
+        }
+        
+        // Apply final position and make visible
+        exportMenu.style.top = top + 'px';
+        exportMenu.style.left = left + 'px';
+        exportMenu.style.visibility = 'visible';
+      } else {
+        exportMenu.style.display = 'none';
+      }
+    };
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!exportButton.contains(e.target) && !exportMenu.contains(e.target)) {
+        exportMenu.style.display = 'none';
+      }
+    });
+    
+    // Export CSV option
+    exportCsvBtn.onclick = () => {
+      tableViewer.exportCSV();
+      exportMenu.style.display = 'none';
+    };
+    
+    // Export JSON option
+    exportJsonBtn.onclick = () => {
+      this.exportJSON(jsonForView);
+      exportMenu.style.display = 'none';
+    };
+    
+    // Add hover effects to menu items
+    [exportCsvBtn, exportJsonBtn].forEach(btn => {
+      btn.onmouseenter = () => btn.style.background = 'var(--button-bg)';
+      btn.onmouseleave = () => btn.style.background = 'none';
+    });
   }
 
   // Toggle view functionality for auto-converted interface
@@ -290,8 +420,7 @@ class UIUtils {
           background: var(--bg-color);
           height: 100%;
           overflow: auto;
-        ">
-          <div style="
+        ">          <div style="
             padding: 16px 20px;
             border-bottom: 1px solid var(--border-color);
             background: var(--header-bg);
@@ -304,16 +433,6 @@ class UIUtils {
             <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-color);">
               Original JSON Data (${dataLength} items)
             </h3>
-            <button onclick="ThemeManager.copyJsonToClipboard()" style="
-              padding: 6px 12px;
-              background: var(--button-active);
-              color: white;
-              border: none;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 12px;
-              font-weight: 500;
-            ">Copy JSON</button>
           </div>
           <pre style="
             margin: 0;
@@ -366,8 +485,41 @@ class UIUtils {
     setTimeout(() => {
       notification.style.opacity = '0';
       notification.style.transform = 'translateY(-20px)';
-      setTimeout(() => notification.remove(), 300);
-    }, 2000);
+      setTimeout(() => notification.remove(), 300);    }, 2000);
+  }
+  static exportJSON(jsonData) {
+    try {
+      // Handle both original JSON string and parsed JSON data
+      let formattedJson;
+      
+      if (typeof jsonData === 'string') {
+        // Original JSON string - use as is but format it
+        try {
+          const parsed = JSON.parse(jsonData);
+          formattedJson = JSON.stringify(parsed, null, 2);
+        } catch (e) {
+          // If parsing fails, use the string as is
+          formattedJson = jsonData;
+        }
+      } else {
+        // Parsed JSON data - stringify it
+        formattedJson = JSON.stringify(jsonData, null, 2);
+      }
+      
+      // Create and download the JSON file
+      const blob = new Blob([formattedJson], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'json-table-export.json';
+      a.click();
+        URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Error exporting JSON:', error);
+      this.showTemporaryMessage('Error downloading JSON', 'error');
+    }
   }
 }
 
