@@ -128,7 +128,7 @@ class UIUtils {
     document.body.appendChild(optionBar);
   }
 
-  static createTableInterface(container, tableData) {
+  static createTableInterface(container, tableData, originalJson = null) {
     // Create the table interface HTML
     container.innerHTML = `
       <div class="json2table-header" style="
@@ -229,7 +229,9 @@ class UIUtils {
     document.getElementById('json2table-search').oninput = (e) => tableViewer.search(e.target.value);
     document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
     document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
-    document.getElementById('json2table-toggle-view').onclick = () => this.toggleView(tableData);
+    // Use original JSON if available, otherwise fall back to table data
+    const jsonForView = originalJson || tableData;
+    document.getElementById('json2table-toggle-view').onclick = () => this.toggleView(jsonForView);
     document.getElementById('json2table-export').onclick = () => tableViewer.exportCSV();
   }
 
@@ -257,8 +259,28 @@ class UIUtils {
       if (expandButton) expandButton.disabled = true;
       if (collapseButton) collapseButton.disabled = true;
       
+      // Handle both original JSON string and parsed JSON data
+      let formattedJson;
+      let dataLength = 0;
+      
+      if (typeof jsonData === 'string') {
+        // Original JSON string - use as is but format it
+        try {
+          const parsed = JSON.parse(jsonData);
+          formattedJson = JSON.stringify(parsed, null, 2);
+          dataLength = Array.isArray(parsed) ? parsed.length : Object.keys(parsed).length;
+        } catch (e) {
+          // If parsing fails, use the string as is
+          formattedJson = jsonData;
+          dataLength = 'N/A';
+        }
+      } else {
+        // Parsed JSON data - stringify it
+        formattedJson = JSON.stringify(jsonData, null, 2);
+        dataLength = Array.isArray(jsonData) ? jsonData.length : Object.keys(jsonData).length;
+      }
+      
       // Render formatted JSON with syntax highlighting
-      const formattedJson = JSON.stringify(jsonData, null, 2);
       jsonContainer.innerHTML = `
         <div style="
           padding: 20px;
@@ -280,7 +302,7 @@ class UIUtils {
             margin: -20px -20px 20px -20px;
           ">
             <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-color);">
-              Formatted JSON Data (${jsonData.length} items)
+              Original JSON Data (${dataLength} items)
             </h3>
             <button onclick="ThemeManager.copyJsonToClipboard()" style="
               padding: 6px 12px;

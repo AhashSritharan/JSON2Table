@@ -90,8 +90,8 @@ class AutoJSONDetector {
     // Apply theme
     ThemeManager.applyTheme();
 
-    // Create table viewer
-    UIUtils.createTableInterface(tableContainer, tableData);
+    // Create table viewer with original JSON text
+    UIUtils.createTableInterface(tableContainer, tableData, originalTextContent);
 
     return { converted: true, note: 'Converted to table', rawLength };
   }
