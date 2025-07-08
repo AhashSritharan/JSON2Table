@@ -638,8 +638,7 @@ class TableViewer {
     const imageId = `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     return `
-      <div class="image-value-container" style="display: inline-flex; align-items: center; gap: 8px; width: fit-content;">
-        <img 
+      <div class="image-value-container" style="display: inline-flex; align-items: center; gap: 8px; width: fit-content;">        <img 
           id="${imageId}"
           src="${imageSrc}" 
           alt="Image" 
@@ -655,7 +654,6 @@ class TableViewer {
             cursor: pointer;
             flex-shrink: 0;
           "
-          onclick="this.parentElement.querySelector('.image-url-display').style.display = this.parentElement.querySelector('.image-url-display').style.display === 'none' ? 'block' : 'none'"
           onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
         />
         <div class="image-preview">
