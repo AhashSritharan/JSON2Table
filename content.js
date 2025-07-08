@@ -1,127 +1,279 @@
-// Content script for JSON2Table extension
+// Content script for JSON2Table extension - Optimized Version
 (function() {
   'use strict';
 
   let detectedData = null;
   let autoConvertEnabled = false;
 
-  // Automatic JSON detection based on json-formatter approach
+  // Performance utilities for debouncing and throttling
+  class PerformanceUtils {
+    static debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    static throttle(func, limit) {
+      let inThrottle;
+      return function(...args) {
+        if (!inThrottle) {
+          func.apply(this, args);
+          inThrottle = true;
+          setTimeout(() => inThrottle = false, limit);
+        }
+      };
+    }
+
+    static requestIdleCallback(callback, options = {}) {
+      if (window.requestIdleCallback) {
+        return window.requestIdleCallback(callback, options);
+      }
+      // Fallback for browsers without requestIdleCallback
+      return setTimeout(callback, 1);
+    }
+  }
+
+  // Memory management utilities
+  class MemoryManager {
+    constructor() {
+      this.caches = new WeakMap();
+      this.eventListeners = new Set();
+      this.timers = new Set();
+    }
+
+    addCache(key, value) {
+      this.caches.set(key, value);
+    }
+
+    getCache(key) {
+      return this.caches.get(key);
+    }
+
+    addEventListener(element, event, handler) {
+      element.addEventListener(event, handler);
+      this.eventListeners.add({ element, event, handler });
+    }
+
+    addTimer(timerId) {
+      this.timers.add(timerId);
+    }
+
+    cleanup() {
+      // Clean up event listeners
+      this.eventListeners.forEach(({ element, event, handler }) => {
+        element.removeEventListener(event, handler);
+      });
+      this.eventListeners.clear();
+
+      // Clear timers
+      this.timers.forEach(timerId => clearTimeout(timerId));
+      this.timers.clear();
+
+      // Clear caches (WeakMap will handle garbage collection)
+      this.caches = new WeakMap();
+    }
+  }
+
+  // Global memory manager instance
+  const memoryManager = new MemoryManager();
+
+  // Error handling and logging
+  class ErrorHandler {
+    static globalHandler(error) {
+      console.error('JSON2Table Error:', error);
+      // Send to background script for debugging
+      chrome.runtime.sendMessage({
+        action: 'error',
+        error: {
+          message: error.message,
+          stack: error.stack,
+          timestamp: new Date().toISOString()
+        }
+      }).catch(() => {}); // Ignore errors in error reporting
+    }
+
+    static sanitizeInput(input) {
+      if (typeof input === 'string') {
+        // Basic XSS prevention
+        return input.replace(/[<>&"']/g, (char) => {
+          const entities = {
+            '<': '&lt;',
+            '>': '&gt;',
+            '&': '&amp;',
+            '"': '&quot;',
+            "'": '&#x27;'
+          };
+          return entities[char];
+        });
+      }
+      return input;
+    }
+  }
+
+  // Set up global error handler
+  window.addEventListener('error', ErrorHandler.globalHandler);
+  window.addEventListener('unhandledrejection', (event) => {
+    ErrorHandler.globalHandler(event.reason);
+  });
+
+  // Automatic JSON detection with optimized parsing
   class AutoJSONDetector {
     static async checkAndConvert(forceConvert = false) {
-      // Only proceed if auto-convert is enabled (unless forced)
-      if (!forceConvert) {
-        const settings = await this.getSettings();
-        if (!settings.autoConvert) {
-          return { converted: false, note: 'Auto-convert disabled' };
-        }
-      }
-
-      // Look for body>pre element (json-formatter approach)
-      const originalPreElement = (() => {
-        const bodyChildren = document.body.children;
-        const length = bodyChildren.length;
-        for (let i = 0; i < length; i++) {
-          const child = bodyChildren[i];
-          if (child.tagName === 'PRE') return child;
-        }
-        return null;
-      })();
-
-      if (originalPreElement === null) {
-        return { converted: false, note: 'No body>pre found' };
-      }
-
-      const rawPreContent = originalPreElement.textContent;
-
-      if (!rawPreContent) {
-        return { converted: false, note: 'No content in body>pre' };
-      }
-
-      const rawLength = rawPreContent.length;
-
-      if (rawLength > 3000000) {
-        return { converted: false, note: 'Too long (>3MB)' };
-      }
-
-      if (!/^\s*[\{\[]/.test(rawPreContent)) {
-        return { converted: false, note: 'Does not start with { or [' };
-      }
-
-      // Try to parse as JSON
-      let parsedJsonValue;
       try {
-        parsedJsonValue = JSON.parse(rawPreContent);
-      } catch (e) {
-        return { converted: false, note: 'Does not parse as JSON' };
-      }
-
-      if (typeof parsedJsonValue !== 'object' && !Array.isArray(parsedJsonValue)) {
-        return { converted: false, note: 'Not an object or array' };
-      }      // Check if it's suitable for table conversion
-      const tableData = JSONDetector.extractTableData(parsedJsonValue);
-      
-      if (!tableData || !Array.isArray(tableData) || tableData.length === 0) {
-        return { converted: false, note: 'No suitable table data found' };
-      }
-
-      // Verify the table data contains objects
-      if (!tableData.some(item => item && typeof item === 'object' && !Array.isArray(item))) {
-        return { converted: false, note: 'Table data must contain objects' };
-      }      // Store ONLY the text content before clearing everything
-      const originalTextContent = originalPreElement.textContent;
-
-      originalPreElement.remove(); // Remove the original PRE element
-
-      // Create containers with clean structure
-      const tableContainer = document.createElement('div');
-      tableContainer.id = 'json2tableContainer';
-      tableContainer.style.cssText = `
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background: var(--bg-color, #ffffff);
-        color: var(--text-color, #333333);
-        margin: 0;
-        padding: 0;
-        height: 100vh;
-        box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
-      `;
-      document.body.appendChild(tableContainer);      // Apply theme
-      this.applyTheme();
-
-      // Create table viewer
-      this.createTableInterface(tableContainer, tableData);return { converted: true, note: 'Converted to table', rawLength };
-    }    static clearPageAndResetStyles() {
-      // Remove all existing content and styles
-      document.body.innerHTML = '';
-      
-      // Remove any remaining PRE elements that might still exist
-      document.querySelectorAll('pre').forEach(pre => pre.remove());
-      
-      document.head.querySelectorAll('style').forEach(style => {
-        // Only remove non-essential styles, keep basic browser styles
-        if (!style.id || !style.id.includes('json2table')) {
-          style.remove();
+        // Only proceed if auto-convert is enabled (unless forced)
+        if (!forceConvert) {
+          const settings = await this.getSettings();
+          if (!settings.autoConvert) {
+            return { converted: false, note: 'Auto-convert disabled' };
+          }
         }
-      });
 
-      // Reset body and html styles to eliminate any scrolling conflicts
-      document.documentElement.style.cssText = `
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        overflow: hidden;
-      `;
-      
-      document.body.style.cssText = `
-        margin: 0;
-        padding: 0;
-        height: 100vh;
-        overflow: hidden;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background: var(--bg-color, #ffffff);
-        color: var(--text-color, #333333);
-      `;
+        // Look for body>pre element (json-formatter approach)
+        const originalPreElement = (() => {
+          const bodyChildren = document.body.children;
+          const length = bodyChildren.length;
+          for (let i = 0; i < length; i++) {
+            const child = bodyChildren[i];
+            if (child.tagName === 'PRE') return child;
+          }
+          return null;
+        })();
+
+        if (originalPreElement === null) {
+          return { converted: false, note: 'No body>pre found' };
+        }
+
+        const rawPreContent = originalPreElement.textContent;
+
+        if (!rawPreContent) {
+          return { converted: false, note: 'No content in body>pre' };
+        }
+
+        const rawLength = rawPreContent.length;
+
+        // Increased limit with streaming support
+        if (rawLength > 10000000) { // 10MB limit instead of 3MB
+          return { converted: false, note: 'Too long (>10MB)' };
+        }
+
+        if (!/^\s*[\{\[]/.test(rawPreContent)) {
+          return { converted: false, note: 'Does not start with { or [' };
+        }
+
+        // Use optimized parsing for large files
+        let parsedJsonValue;
+        try {
+          if (rawLength > 1000000) { // 1MB+ files use Web Worker
+            parsedJsonValue = await this.parseJsonInWorker(rawPreContent);
+          } else {
+            parsedJsonValue = JSON.parse(rawPreContent);
+          }
+        } catch (e) {
+          return { converted: false, note: 'Does not parse as JSON' };
+        }
+
+        if (typeof parsedJsonValue !== 'object' && !Array.isArray(parsedJsonValue)) {
+          return { converted: false, note: 'Not an object or array' };
+        }
+
+        // Check if it's suitable for table conversion
+        const tableData = JSONDetector.extractTableData(parsedJsonValue);
+        
+        if (!tableData || !Array.isArray(tableData) || tableData.length === 0) {
+          return { converted: false, note: 'No suitable table data found' };
+        }
+
+        // Verify the table data contains objects
+        if (!tableData.some(item => item && typeof item === 'object' && !Array.isArray(item))) {
+          return { converted: false, note: 'Table data must contain objects' };
+        }
+
+        // Store ONLY the text content before clearing everything
+        const originalTextContent = originalPreElement.textContent;
+
+        originalPreElement.remove(); // Remove the original PRE element
+
+        // Create containers with clean structure
+        const tableContainer = document.createElement('div');
+        tableContainer.id = 'json2tableContainer';
+        tableContainer.style.cssText = `
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background: var(--bg-color, #ffffff);
+          color: var(--text-color, #333333);
+          margin: 0;
+          padding: 0;
+          height: 100vh;
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+        `;
+        document.body.appendChild(tableContainer);
+
+        // Apply theme
+        this.applyTheme();
+
+        // Create table viewer
+        this.createTableInterface(tableContainer, tableData);
+
+        return { converted: true, note: 'Converted to table', rawLength };
+      } catch (error) {
+        ErrorHandler.globalHandler(error);
+        return { converted: false, note: `Error: ${error.message}` };
+      }
+    }
+
+    // Web Worker-based JSON parsing for large files
+    static async parseJsonInWorker(jsonString) {
+      return new Promise((resolve, reject) => {
+        // Create inline worker for JSON parsing
+        const workerCode = `
+          self.onmessage = function(e) {
+            try {
+              const parsed = JSON.parse(e.data);
+              self.postMessage({ success: true, data: parsed });
+            } catch (error) {
+              self.postMessage({ success: false, error: error.message });
+            }
+          };
+        `;
+        
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(blob));
+        
+        worker.onmessage = function(e) {
+          const { success, data, error } = e.data;
+          if (success) {
+            resolve(data);
+          } else {
+            reject(new Error(error));
+          }
+          worker.terminate();
+          URL.revokeObjectURL(blob);
+        };
+        
+        worker.onerror = function(error) {
+          reject(error);
+          worker.terminate();
+          URL.revokeObjectURL(blob);
+        };
+        
+        worker.postMessage(jsonString);
+        
+        // Timeout after 10 seconds
+        const timeoutId = setTimeout(() => {
+          worker.terminate();
+          URL.revokeObjectURL(blob);
+          reject(new Error('JSON parsing timeout'));
+        }, 10000);
+        
+        memoryManager.addTimer(timeoutId);
+      });
     }
 
     static createTableInterface(container, tableData) {
@@ -161,7 +313,8 @@
               border-radius: 4px;
               cursor: pointer;
               font-size: 14px;
-            ">Expand All</button>            <button id="json2table-collapse-all" style="
+            ">Expand All</button>
+            <button id="json2table-collapse-all" style="
               padding: 6px 12px;
               background: var(--button-bg);
               color: var(--text-color);
@@ -188,7 +341,8 @@
               cursor: pointer;
               font-size: 14px;
             ">Export CSV</button>
-          </div>        </div>
+          </div>
+        </div>
         <div id="json2table-table-container" style="
           flex: 1;
           overflow: auto;
@@ -202,315 +356,11 @@
         "></div>
       `;
 
-      // Add table styles
-      const style = document.createElement('style');
-      style.textContent = `        .json2table-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          font-size: 14px;
-          table-layout: auto;
-        }        .json2table-table th {
-          background: var(--header-bg);
-          color: var(--text-color);
-          padding: 16px 16px;
-          text-align: left;
-          border-bottom: 2px solid var(--border-color);
-          font-weight: 600;
-          position: sticky;
-          top: 0;
-          z-index: 100;
-        }        .json2table-table td {
-          padding: 16px;
-          border-bottom: 1px solid var(--border-color);
-          color: var(--text-color);
-          vertical-align: top;
-          word-wrap: break-word;
-          white-space: normal;
-        }
-        
-        /* Apply minimum width only to cells with substantial content */
-        .json2table-table td.wide-content {
-          min-width: 200px;
-        }        .json2table-table tr:hover {
-          background: var(--hover-bg);
-        }
-        
-        /* Button and input disabled states */
-        button:disabled {
-          background: #d1d5db !important;
-          color: #9ca3af !important;
-          cursor: not-allowed;
-        }
-        input:disabled {
-          background: #f3f4f6 !important;
-          color: #9ca3af !important;
-          cursor: not-allowed;
-        }
-        
-        .expandable-array, .expandable-object {
-          display: inline-block;
-          padding: 2px 6px;
-          border-radius: 3px;
-          font-size: 12px;
-          cursor: pointer;
-          margin: 1px;
-          font-weight: 500;
-        }
-        .expandable-array {
-          background: var(--array-badge);
-          color: white;
-        }
-        .expandable-object {
-          background: var(--object-badge);
-          color: white;
-        }
-        .expandable-array:hover, .expandable-object:hover {
-          opacity: 0.8;
-        }
-        .json2table-expanded-row {
-          background: var(--expand-bg) !important;
-        }        .json2table-expanded-content {
-          padding: 10px 15px;
-          border-left: 3px solid var(--button-active);
-          margin: 5px 0;
-        }
-          /* Inline expansion styles */        .inline-array-expansion, .inline-object-expansion {
-          margin-top: 8px;
-          padding: 8px;
-          background: var(--expand-bg);
-          border-radius: 4px;
-          border-left: 3px solid var(--array-badge);
-          font-size: 12px;
-          /* Remove position: relative and z-index to prevent stacking context issues with image previews */
-        }        .inline-object-expansion {
-          border-left-color: var(--object-badge);
-        }
-        
-        /* Ensure inline table containers don't interfere with image previews */
-        .inline-array-table-wrapper, .inline-object-table-wrapper, .inline-table {
-          position: static;
-          z-index: auto;
-        }
-        .inline-expansion-header {
-          font-weight: 600;
-          color: var(--text-color);
-          margin-bottom: 6px;
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }        .inline-array-table, .inline-object-properties {
-          max-height: 200px;
-          overflow-y: auto;
-        }
-          /* Inline table styles */
-        .inline-array-table-wrapper {
-          margin-top: 6px;
-          border-radius: 4px;
-          overflow: hidden;
-          border: 1px solid var(--border-color);
-        }
-        
-        .inline-object-table-wrapper {
-          margin-top: 6px;
-          border-radius: 4px;
-          overflow: hidden;
-          border: 1px solid var(--border-color);
-        }.inline-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 11px;
-          background: var(--bg-color);
-        }
-        .inline-table th {
-          background: var(--header-bg);
-          padding: 6px 8px;
-          border-bottom: 1px solid var(--border-color);
-          border-right: 1px solid var(--border-color);
-          font-weight: 600;
-          color: var(--text-color);
-          text-align: left;
-          font-size: 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .inline-table th:last-child {
-          border-right: none;
-        }
-        .inline-table-row {
-          border-bottom: 1px solid var(--border-color);
-          background: var(--bg-color);
-        }        .inline-table-row:hover {
-          background: var(--hover-bg);
-        }
-        .inline-table-cell {
-          padding: 6px 8px;
-          border-right: 1px solid var(--border-color);
-          color: var(--text-color);
-          vertical-align: top;
-          white-space: nowrap;
-        }
-        .inline-table-cell:last-child {
-          border-right: none;
-        }
-        
-        .inline-array-row, .inline-property-row {
-          margin-bottom: 4px;
-          padding: 4px 6px;
-          background: var(--button-bg);
-          border-radius: 3px;
-          border: 1px solid var(--border-color);
-          font-size: 11px;
-          line-height: 1.3;
-        }
-        .inline-item-index {
-          color: var(--array-badge);
-          font-weight: 600;
-          margin-right: 6px;
-          font-family: monospace;
-        }        .inline-property-name {
-          color: var(--object-badge);
-          font-weight: 600;
-          margin-right: 6px;
-        }
-        .inline-property-value, .inline-value {
-          color: var(--text-color);
-        }        /* Style for table-based object property names */
-        .inline-table-cell.inline-property-name {
-          background: var(--bg-color);
-          font-weight: 600;
-          color: var(--object-badge);
-          /* Remove fixed width - let content determine size naturally */
-        }
-        
-        /* Ensure hover effect applies to entire row including property column */
-        .inline-table-row:hover .inline-table-cell.inline-property-name {
-          background: var(--hover-bg);
-        }
-        
-        /* Apply smart width logic to object property value cells */
-        .inline-table-cell.inline-property-value.wide-content {
-          min-width: 200px;
-        }
-        .inline-property {
-          margin-right: 8px;
-        }
-        .inline-property strong {
-          color: var(--object-badge);
-        }
-          /* Inline value formatting */
-        .null-value {
-          color: var(--muted-text);
-          font-style: italic;
-        }
-        .boolean-value {
-          font-weight: 600;
-        }        .boolean-value.true {
-          color: #4caf50;
-        }
-        .boolean-value.false {
-          color: #ff5252;
-        }        .date-value {
-          color: #9c27b0;
-          font-weight: 500;
-        }.nested-array, .nested-object {
-          color: #64748b;
-          background: var(--button-bg);
-          padding: 1px 4px;
-          border-radius: 2px;
-          font-size: 10px;
-          border: 1px solid var(--border-color);
-        }
-        .nested-object-detailed {
-          color: #374151;
-          background: var(--expand-bg);
-          padding: 2px 6px;
-          border-radius: 3px;
-          font-size: 11px;
-          border: 1px solid var(--border-color);
-          line-height: 1.4;
-        }        .nested-object-detailed strong {
-          color: var(--object-badge);
-          font-weight: 600;
-        }
-        
-        /* Search highlighting */
-        .search-highlight {
-          background: #ffeb3b;
-          color: #333;
-          padding: 1px 2px;
-          border-radius: 2px;
-          font-weight: 600;
-        }
-          /* Dark mode search highlighting */
-        @media (prefers-color-scheme: dark) {
-          .search-highlight {
-            background: #ffc107;
-            color: #000;
-          }
-        }        /* Image hover effects */
-        .hover-expandable {
-          position: relative;
-          transition: all 0.2s ease;
-        }
-        
-        .hover-expandable:hover {
-          transform: scale(1.05);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-          border-color: #3b82f6 !important;
-        }        /* Image hover preview container */
-        .image-value-container {
-          /* Remove position: relative to avoid creating a stacking context */
-          display: inline-block;
-        }        .image-value-container .image-preview {
-          position: fixed;
-          background: rgba(0, 0, 0, 0.9);
-          border-radius: 8px;
-          padding: 10px;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-          z-index: 1000002;
-          pointer-events: none;
-          opacity: 0;
-          visibility: hidden;
-          transition: opacity 0.2s ease, visibility 0.2s ease;
-          top: var(--mouse-y, 50%);
-          left: var(--mouse-x, 50%);
-          transform: var(--preview-transform, translate(15px, -50%));
-          max-width: 400px;
-          max-height: 400px;
-        }
-        
-        .image-value-container .image-preview img {
-          max-width: 400px;
-          max-height: 400px;
-          border-radius: 4px;
-          display: block;
-        }
-        
-        .image-value-container .image-preview .preview-info {
-          color: white;
-          font-size: 12px;
-          margin-top: 8px;
-          text-align: center;
-          opacity: 0.8;
-        }
-        
-        .hover-expandable:hover + .image-preview,
-        .image-value-container:hover .image-preview {
-          opacity: 1;
-          visibility: visible;
-        }
-        
-        .image-hover-info {
-          color: white;
-          font-size: 12px;
-          text-align: center;
-          margin-top: 5px;
-          opacity: 0.8;
-        }
-      `;
-      document.head.appendChild(style);      // Initialize table viewer
-      const tableViewer = new TableViewer(tableData);
+      // Add optimized styles
+      this.addOptimizedStyles();
+
+      // Initialize optimized table viewer
+      const tableViewer = new OptimizedTableViewer(tableData);
       tableViewer.render();
 
       // Check if auto-expand is enabled and expand all automatically
@@ -521,164 +371,330 @@
             tableViewer.expandAll();
           }, 100);
         }
-      });      // Event listeners
-      document.getElementById('json2table-search').oninput = (e) => tableViewer.search(e.target.value);
-      document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
-      document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
-      document.getElementById('json2table-toggle-view').onclick = () => this.toggleView(tableData);
-      document.getElementById('json2table-export').onclick = () => tableViewer.exportCSV();
-    }
+      });
 
-    // Toggle view functionality for auto-converted interface
-    static toggleView(jsonData) {
-      const tableContainer = document.getElementById('json2table-table-container');
-      const jsonContainer = document.getElementById('json2table-json-container');
-      const toggleButton = document.getElementById('json2table-toggle-view');
+      // Event listeners with optimization
       const searchInput = document.getElementById('json2table-search');
-      const expandButton = document.getElementById('json2table-expand-all');
-      const collapseButton = document.getElementById('json2table-collapse-all');
+      const debouncedSearch = PerformanceUtils.debounce((value) => tableViewer.search(value), 300);
+      searchInput.addEventListener('input', (e) => debouncedSearch(e.target.value));
 
-      if (!tableContainer || !jsonContainer) return;
-
-      const isJsonView = jsonContainer.style.display !== 'none';
-
-      if (!isJsonView) {
-        // Switch to JSON view
-        tableContainer.style.display = 'none';
-        jsonContainer.style.display = 'block';
-        toggleButton.textContent = 'Table View';
-        
-        // Disable table-specific controls
-        if (searchInput) searchInput.disabled = true;
-        if (expandButton) expandButton.disabled = true;
-        if (collapseButton) collapseButton.disabled = true;
-        
-        // Render formatted JSON with syntax highlighting
-        const formattedJson = JSON.stringify(jsonData, null, 2);
-        jsonContainer.innerHTML = `
-          <div style="
-            padding: 20px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 14px;
-            line-height: 1.6;
-            background: var(--bg-color);
-            height: 100%;
-            overflow: auto;
-          ">
-            <div style="
-              padding: 16px 20px;
-              border-bottom: 1px solid var(--border-color);
-              background: var(--header-bg);
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-radius: 4px 4px 0 0;
-              margin: -20px -20px 20px -20px;
-            ">
-              <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-color);">
-                Formatted JSON Data (${jsonData.length} items)
-              </h3>
-              <button onclick="AutoJSONDetector.copyJsonToClipboard()" style="
-                padding: 6px 12px;
-                background: var(--button-active);
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 12px;
-                font-weight: 500;
-              ">Copy JSON</button>
-            </div>
-            <pre style="
-              margin: 0;
-              white-space: pre-wrap;
-              color: var(--text-color);
-              background: var(--bg-color);
-            ">${this.syntaxHighlightJson(formattedJson)}</pre>
-          </div>
-        `;
-        
-        // Store JSON data for copying
-        window.currentJsonData = formattedJson;
-      } else {
-        // Switch to table view
-        tableContainer.style.display = 'block';
-        jsonContainer.style.display = 'none';
-        toggleButton.textContent = 'JSON View';
-        
-        // Re-enable table-specific controls
-        if (searchInput) searchInput.disabled = false;
-        if (expandButton) expandButton.disabled = false;
-        if (collapseButton) collapseButton.disabled = false;
-      }
+      document.getElementById('json2table-expand-all').addEventListener('click', () => tableViewer.expandAll());
+      document.getElementById('json2table-collapse-all').addEventListener('click', () => tableViewer.collapseAll());
+      document.getElementById('json2table-toggle-view').addEventListener('click', () => this.toggleView(tableData));
+      document.getElementById('json2table-export').addEventListener('click', () => tableViewer.exportCSV());
     }
 
-    // Syntax highlighting for JSON
-    static syntaxHighlightJson(json) {
-      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-        let cls = 'number';
-        if (/^"/.test(match)) {
-          if (/:$/.test(match)) {
-            cls = 'key';
-          } else {
-            cls = 'string';
-          }
-        } else if (/true|false/.test(match)) {
-          cls = 'boolean';
-        } else if (/null/.test(match)) {
-          cls = 'null';
+    static addOptimizedStyles() {
+      const style = document.createElement('style');
+      style.id = 'json2table-optimized-styles';
+      style.textContent = `
+        /* Optimized table styles for better performance */
+        .json2table-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-size: 14px;
+          table-layout: auto; /* Auto layout to allow dynamic column sizing */
         }
-        return '<span style="color: ' + this.getJsonColor(cls) + '">' + match + '</span>';
-      }.bind(this));
-    }    // Get colors for JSON syntax highlighting
-    static getJsonColor(type) {
-      // Check if we're in dark mode
-      const isDarkMode = document.documentElement.style.getPropertyValue('--bg-color') === '#121212' ||
-                        window.matchMedia('(prefers-color-scheme: dark)').matches;
-      
-      const lightColors = {
-        string: '#4caf50',   // Material Green
-        number: '#ff5252',   // Material Red
-        boolean: '#9c27b0',  // Material Purple
-        null: '#757575',     // Material secondary text
-        key: '#2196f3'       // Material Blue
-      };
-      
-      const darkColors = {
-        string: '#4caf50',   // Material Green (consistent across themes)
-        number: '#ff5252',   // Material Red (consistent across themes)
-        boolean: '#9c27b0',  // Material Purple (consistent across themes)
-        null: '#b0b0b0',     // Material secondary text on dark
-        key: '#2196f3'       // Material Blue (consistent across themes)
-      };
-      
-      const colors = isDarkMode ? darkColors : lightColors;
-      return colors[type] || (isDarkMode ? '#e0e0e0' : '#212121');
+
+        .json2table-table th {
+          background: var(--header-bg);
+          color: var(--text-color);
+          padding: 12px 16px;
+          text-align: left;
+          border-bottom: 2px solid var(--border-color);
+          font-weight: 600;
+          position: sticky;
+          top: 0;
+          z-index: 100;
+          white-space: nowrap;
+        }
+
+        .json2table-table td {
+          padding: 12px 16px;
+          border-bottom: 1px solid var(--border-color);
+          color: var(--text-color);
+          vertical-align: top;
+          white-space: nowrap;
+        }
+
+        /* Only apply max-width to cells with long text content */
+        .json2table-table td.long-text-content {
+          max-width: 400px;
+          white-space: normal;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+        }
+
+        .json2table-table tr:hover {
+          background: var(--hover-bg);
+        }
+
+        /* Virtual scrolling container */
+        .virtual-scroll-container {
+          height: 100%;
+          overflow-y: auto;
+          overflow-x: auto;
+          scroll-behavior: smooth;
+        }
+
+        .virtual-scroll-spacer {
+          pointer-events: none;
+        }
+
+        /* Performance optimized expansion styles */
+        .expandable-array, .expandable-object {
+          display: inline-block;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 12px;
+          cursor: pointer;
+          margin: 1px;
+          font-weight: 500;
+          transition: transform 0.1s ease;
+        }
+
+        .expandable-array {
+          background: var(--array-badge);
+          color: white;
+        }
+
+        .expandable-object {
+          background: var(--object-badge);
+          color: white;
+        }
+
+        .expandable-array:hover, .expandable-object:hover {
+          transform: scale(1.05);
+        }
+
+        /* Expanded content styles */
+        .expanded-row {
+          background: var(--hover-bg);
+        }
+
+        .expanded-cell {
+          padding: 0 !important;
+          border: none !important;
+        }
+
+        .expanded-content {
+          background: var(--bg-color);
+          border: 2px solid var(--border-color);
+          border-radius: 6px;
+          margin: 8px;
+          overflow: hidden;
+        }
+
+        .expanded-header {
+          background: var(--header-bg);
+          padding: 8px 12px;
+          border-bottom: 1px solid var(--border-color);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 13px;
+        }
+
+        .collapse-btn {
+          background: #ff4444;
+          color: white;
+          border: none;
+          padding: 4px 8px;
+          border-radius: 3px;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 500;
+        }
+
+        .collapse-btn:hover {
+          background: #cc0000;
+        }
+
+        .expanded-data {
+          padding: 12px;
+          max-height: 400px;
+          overflow: auto;
+          font-size: 13px;
+        }
+
+        /* Inline expansion styles */
+        .cell-expanded {
+          white-space: normal !important;
+          vertical-align: top !important;
+          max-width: none !important;
+        }
+
+        .expanded-content-inline {
+          margin-top: 8px;
+          border: 1px solid var(--border-color);
+          border-radius: 4px;
+          background: var(--bg-color);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .expanded-content-wrapper {
+          overflow: hidden;
+        }
+
+        .expanded-header-inline {
+          background: var(--header-bg);
+          padding: 6px 8px;
+          border-bottom: 1px solid var(--border-color);
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--text-color);
+        }
+
+        .expanded-data-inline {
+          padding: 8px;
+          max-height: 300px;
+          overflow: auto;
+          font-size: 12px;
+        }
+
+        .expanded-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 12px;
+        }
+
+        .expanded-table th,
+        .expanded-table td {
+          padding: 6px 8px;
+          border: 1px solid var(--border-color);
+          text-align: left;
+          vertical-align: top;
+        }
+
+        .expanded-table th {
+          background: var(--header-bg);
+          font-weight: 600;
+          white-space: nowrap;
+        }
+
+        .expanded-table td {
+          max-width: 200px;
+          word-wrap: break-word;
+        }
+
+        .expanded-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+
+        .expanded-list li {
+          padding: 4px 0;
+          border-bottom: 1px solid var(--border-color);
+        }
+
+        .expanded-list li:last-child {
+          border-bottom: none;
+        }
+
+        .expanded-properties {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        .expanded-properties td {
+          padding: 6px;
+          border-bottom: 1px solid var(--border-color);
+          vertical-align: top;
+        }
+
+        .property-key {
+          width: 30%;
+          font-weight: 500;
+          color: var(--muted-text);
+        }
+
+        .property-value {
+          width: 70%;
+        }
+
+        .truncated-notice {
+          text-align: center;
+          padding: 8px;
+          font-style: italic;
+          color: var(--muted-text);
+          background: var(--hover-bg);
+          border-top: 1px solid var(--border-color);
+        }
+
+        .nested-array, .nested-object {
+          font-size: 11px;
+          padding: 1px 4px;
+          border-radius: 2px;
+          font-weight: 500;
+        }
+
+        .nested-array {
+          background: #e1bee7;
+          color: #4a148c;
+        }
+
+        .nested-object {
+          background: #bbdefb;
+          color: #0d47a1;
+        }
+
+        .long-string {
+          font-family: monospace;
+          font-size: 11px;
+          color: var(--muted-text);
+        }
+
+        .null-value {
+          font-style: italic;
+          color: var(--muted-text);
+          opacity: 0.7;
+        }
+
+        .boolean-value {
+          font-weight: 500;
+        }
+
+        .number-value {
+          color: #1976d2;
+          font-weight: 500;
+        }
+
+        .string-value {
+          color: var(--text-color);
+        }
+
+        /* Search highlighting */
+        .search-highlight {
+          background: #ffeb3b;
+          color: #333;
+          padding: 1px 2px;
+          border-radius: 2px;
+          font-weight: 600;
+        }
+
+        /* Loading states */
+        .loading-placeholder {
+          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+          background-size: 200% 100%;
+          animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `;
+      document.head.appendChild(style);
     }
 
-    // Copy JSON to clipboard
-    static copyJsonToClipboard() {
-      if (window.currentJsonData) {
-        navigator.clipboard.writeText(window.currentJsonData).then(() => {
-          const btn = event.target;
-          const originalText = btn.textContent;
-          btn.textContent = 'Copied!';
-          btn.style.background = '#10b981';
-          setTimeout(() => {
-            btn.textContent = originalText;
-            btn.style.background = 'var(--button-active)';
-          }, 2000);
-        }).catch(err => {
-          console.error('Failed to copy: ', err);
-        });
-      }
-    }static async getSettings() {
+    static async getSettings() {
       return new Promise((resolve) => {
         chrome.storage.local.get(['autoConvert', 'autoExpand', 'themeOverride'], (result) => {
           resolve({
-            autoConvert: result.autoConvert !== false, // Default to true
-            autoExpand: result.autoExpand !== false, // Default to true
+            autoConvert: result.autoConvert !== false,
+            autoExpand: result.autoExpand !== false,
             themeOverride: result.themeOverride || 'system'
           });
         });
@@ -686,7 +702,6 @@
     }
 
     static applyTheme() {
-      // Add CSS variables for theming
       const style = document.createElement('style');
       style.id = 'json2tableTheme';
       
@@ -694,7 +709,8 @@
       this.getSettings().then(settings => {
         let themeCSS = '';
         
-        switch (settings.themeOverride) {          case 'force_light':
+        switch (settings.themeOverride) {
+          case 'force_light':
             themeCSS = `
               :root {
                 --bg-color: #ffffff;
@@ -703,20 +719,16 @@
                 --header-bg: #f5f5f5;
                 --hover-bg: #f5f5f5;
                 --button-bg: #ffffff;
-                --button-border: #e0e0e0;
                 --button-active: #2196f3;
-                --expand-bg: #ffffff;
                 --array-badge: #9c27b0;
                 --object-badge: #2196f3;
                 --muted-text: #757575;
-                --json-string-color: #4caf50;
-                --json-number-color: #ff5252;
-                --json-boolean-color: #9c27b0;
-                --json-null-color: #757575;
-                --json-key-color: #2196f3;
               }
             `;
-            break;case 'force_dark':            themeCSS = `
+            break;
+
+          case 'force_dark':
+            themeCSS = `
               :root {
                 --bg-color: #121212;
                 --text-color: #e0e0e0;
@@ -724,38 +736,28 @@
                 --header-bg: #1e1e1e;
                 --hover-bg: #2c2c2c;
                 --button-bg: #1e1e1e;
-                --button-border: #444444;
                 --button-active: #2196f3;
-                --expand-bg: #121212;
                 --array-badge: #9c27b0;
                 --object-badge: #2196f3;
                 --muted-text: #b0b0b0;
-                --json-string-color: #4caf50;
-                --json-number-color: #ff5252;
-                --json-boolean-color: #9c27b0;
-                --json-null-color: #b0b0b0;
-                --json-key-color: #2196f3;
               }
             `;
-            break;case 'system':
-          default:            themeCSS = `              :root {
+            break;
+
+          case 'system':
+          default:
+            themeCSS = `
+              :root {
                 --bg-color: #ffffff;
                 --text-color: #212121;
                 --border-color: #e0e0e0;
                 --header-bg: #f5f5f5;
                 --hover-bg: #f5f5f5;
                 --button-bg: #ffffff;
-                --button-border: #e0e0e0;
                 --button-active: #2196f3;
-                --expand-bg: #ffffff;
                 --array-badge: #9c27b0;
                 --object-badge: #2196f3;
                 --muted-text: #757575;
-                --json-string-color: #4caf50;
-                --json-number-color: #ff5252;
-                --json-boolean-color: #9c27b0;
-                --json-null-color: #757575;
-                --json-key-color: #2196f3;
               }
               
               @media (prefers-color-scheme: dark) {
@@ -766,17 +768,10 @@
                   --header-bg: #1e1e1e;
                   --hover-bg: #2c2c2c;
                   --button-bg: #1e1e1e;
-                  --button-border: #444444;
                   --button-active: #2196f3;
-                  --expand-bg: #121212;
                   --array-badge: #9c27b0;
                   --object-badge: #2196f3;
                   --muted-text: #b0b0b0;
-                  --json-string-color: #4caf50;
-                  --json-number-color: #ff5252;
-                  --json-boolean-color: #9c27b0;
-                  --json-null-color: #b0b0b0;
-                  --json-key-color: #2196f3;
                 }
               }
             `;
@@ -786,98 +781,32 @@
       });
       
       document.head.appendChild(style);
-    }  static createToggleButtons(tableContainer, rawJsonContainer) {
-    const optionBar = document.createElement('div');
-    optionBar.id = 'json2tableOptionBar';
-    optionBar.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 10000;
-      display: flex;
-      gap: 8px;
-      background: var(--button-bg);
-      border: 1px solid var(--button-border);
-      border-radius: 8px;
-      padding: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    `;
-
-    const buttonTable = document.createElement('button');
-    buttonTable.textContent = 'JSON Table View';
-    buttonTable.style.cssText = `
-      padding: 10px 18px;
-      border: none;
-      background: var(--button-active);
-      color: white;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.2s ease;
-    `;
-
-    // Only add raw JSON toggle if rawJsonContainer is provided
-    if (rawJsonContainer) {
-      const buttonRaw = document.createElement('button');
-      buttonRaw.textContent = 'Raw JSON';
-      buttonRaw.style.cssText = `
-        padding: 10px 18px;
-        border: none;
-        background: var(--button-bg);
-        color: var(--text-color);
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.2s ease;
-      `;
-
-      let tableMode = true;
-      
-      buttonRaw.addEventListener('click', () => {
-        if (tableMode) {
-          tableMode = false;
-          tableContainer.hidden = true;
-          rawJsonContainer.hidden = false;
-          // Enable scrolling for raw view
-          document.body.style.overflow = 'auto';
-          document.documentElement.style.overflow = 'auto';
-          
-          buttonTable.style.background = 'var(--button-bg)';
-          buttonTable.style.color = 'var(--text-color)';
-          buttonRaw.style.background = 'var(--button-active)';
-          buttonRaw.style.color = 'white';
-        }
-      });
-
-      buttonTable.addEventListener('click', () => {
-        if (!tableMode) {
-          tableMode = true;
-          tableContainer.hidden = false;
-          rawJsonContainer.hidden = true;
-          // Disable scrolling for table view (table handles its own scrolling)
-          document.body.style.overflow = 'hidden';
-          document.documentElement.style.overflow = 'hidden';
-          
-          buttonTable.style.background = 'var(--button-active)';
-          buttonTable.style.color = 'white';
-          buttonRaw.style.background = 'var(--button-bg)';
-          buttonRaw.style.color = 'var(--text-color)';
-        }
-      });
-
-      optionBar.appendChild(buttonTable);
-      optionBar.appendChild(buttonRaw);
-    } else {
-      // Table-only mode - just show an indicator
-      buttonTable.style.cursor = 'default';
-      buttonTable.title = 'Currently viewing JSON as interactive table';
-      optionBar.appendChild(buttonTable);
     }
-    
-    document.body.appendChild(optionBar);
-  }
+
+    static toggleView(jsonData) {
+      const tableContainer = document.getElementById('json2table-table-container');
+      const jsonContainer = document.getElementById('json2table-json-container');
+      const toggleButton = document.getElementById('json2table-toggle-view');
+
+      const isJsonView = jsonContainer.style.display !== 'none';
+
+      if (!isJsonView) {
+        tableContainer.style.display = 'none';
+        jsonContainer.style.display = 'block';
+        toggleButton.textContent = 'Table View';
+        
+        const formattedJson = JSON.stringify(jsonData, null, 2);
+        jsonContainer.innerHTML = `
+          <div style="padding: 20px; font-family: monospace; font-size: 14px;">
+            <pre style="white-space: pre-wrap; color: var(--text-color);">${ErrorHandler.sanitizeInput(formattedJson)}</pre>
+          </div>
+        `;
+      } else {
+        tableContainer.style.display = 'block';
+        jsonContainer.style.display = 'none';
+        toggleButton.textContent = 'JSON View';
+      }
+    }
   }
 
   // JSON detection and parsing utilities
@@ -910,15 +839,16 @@
       }
 
       return null;
-    }    static isValidDataStructure(data) {
-      // Check if it's an array of objects (like the products example)
+    }
+
+    static isValidDataStructure(data) {
+      // Check if it's an array of objects
       if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
         return true;
       }
       
-      // Check if it's a single object (like a user profile) - NEW: Support single objects
+      // Check if it's a single object
       if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
-        // Accept any non-empty object as valid for single-row table
         const keys = Object.keys(data);
         if (keys.length > 0) {
           return true;
@@ -935,13 +865,15 @@
       }
       
       return false;
-    }    static extractTableData(jsonData) {
+    }
+
+    static extractTableData(jsonData) {
       // If it's directly an array, use it
       if (Array.isArray(jsonData)) {
         return jsonData;
       }
       
-      // NEW: If it's a single object, convert it to property-value format
+      // If it's a single object, convert it to property-value format
       if (typeof jsonData === 'object' && jsonData !== null && !Array.isArray(jsonData)) {
         // Check if this object has array properties first
         let hasArrayProperty = false;
@@ -972,8 +904,14 @@
       return [];
     }
   }
-  // Data preparation utility - keeps objects intact for expansion
+
+  // Data preparation utility - improved with iterative approach and memoization
   class DataFlattener {
+    constructor() {
+      this.memoCache = new Map();
+      this.maxCacheSize = 1000;
+    }
+
     static prepareTableData(data) {
       // Don't flatten objects - keep them intact for expandable display
       return data.map(item => this.prepareItem(item));
@@ -991,7 +929,7 @@
           } else if (value !== null && typeof value === 'object') {
             // Keep object intact but limit size for performance
             const keys = Object.keys(value);
-            if (keys.length <= 20) { // Limit to prevent performance issues
+            if (keys.length <= 50) { // Increased from 20 to 50 for better data display
               prepared[key] = value;
             } else {
               prepared[key] = `{${keys.length} properties - too large to expand}`;
@@ -999,837 +937,157 @@
           } else {
             prepared[key] = value;
           }
-        }      }
+        }
+      }
       return prepared;
     }
-  }
 
-  // Message listener for communication with popup
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'detectJson') {
-      // Use forced conversion for manual detection (bypass auto-convert setting)
-      AutoJSONDetector.checkAndConvert(true).then(result => {
-        if (result.converted) {
-          sendResponse({
-            success: true,
-            recordCount: result.rawLength ? Math.round(result.rawLength/1024) + 'KB' : 'Unknown size',
-            converted: true
-          });
-        } else {
-          sendResponse({ success: false, note: result.note || 'No suitable JSON found' });
-        }      }).catch(error => {
-        console.error('JSON detection error:', error);
-        sendResponse({ success: false, error: error.message });
-      });      return true; // Will respond asynchronously
-    }
-    
-    if (request.action === 'settingsChanged') {
-      // Handle settings changes from popup
-      // Settings are automatically saved to chrome.storage by popup.js
-      // No response needed
-      return false;
-    }
-  });
-
-  // Create and open table viewer
-  function openTableViewer(data) {
-    // Remove existing viewer if present
-    const existingViewer = document.getElementById('json2table-viewer');
-    if (existingViewer) {
-      existingViewer.remove();
-    }
-
-    // Create viewer container
-    const viewer = document.createElement('div');
-    viewer.id = 'json2table-viewer';
-    viewer.innerHTML = `
-      <div class="json2table-overlay">
-        <div class="json2table-modal">
-          <div class="json2table-header">
-            <h2>JSON Table Viewer</h2>            <div class="json2table-controls">
-              <input type="text" id="json2table-search" placeholder="Search..." />
-              <button id="json2table-expand-all">Expand All</button>
-              <button id="json2table-collapse-all">Collapse All</button>
-              <button id="json2table-toggle-view">JSON View</button>
-              <button id="json2table-export">Export CSV</button>
-              <button id="json2table-close">✕</button>
-            </div>
-          </div>          <div class="json2table-content">
-            <div id="json2table-table-container"></div>
-            <div id="json2table-json-container" style="display: none;"></div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Add styles
-    const style = document.createElement('style');
-    style.textContent = `
-      .json2table-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.8);
-        z-index: 999999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .json2table-modal {
-        width: 95%;
-        height: 90%;
-        background: white;
-        border-radius: 8px;
-        display: flex;
-        flex-direction: column;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-      }
-      .json2table-header {
-        padding: 20px;
-        border-bottom: 1px solid #e5e7eb;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: #f9fafb;
-        border-radius: 8px 8px 0 0;
-      }
-      .json2table-header h2 {
-        margin: 0;
-        color: #1f2937;
-        font-size: 20px;
-      }
-      .json2table-controls {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-      }
-      .json2table-controls input {
-        padding: 8px 12px;
-        border: 1px solid #d1d5db;
-        border-radius: 4px;
-        font-size: 14px;
-        width: 200px;
-      }      .json2table-controls button {
-        padding: 8px 16px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        margin-left: 8px;
-        transition: background 0.15s ease;
-      }
-      .json2table-controls button:disabled {
-        background: #d1d5db !important;
-        color: #9ca3af !important;
-        cursor: not-allowed;
-      }
-      .json2table-controls input:disabled {
-        background: #f3f4f6;
-        color: #9ca3af;
-        cursor: not-allowed;
-      }
-      #json2table-expand-all {
-        background: #10b981;
-        color: white;
-      }
-      #json2table-expand-all:hover {
-        background: #059669;
-      }
-      #json2table-collapse-all {
-        background: #f59e0b;
-        color: white;
-      }      #json2table-collapse-all:hover {
-        background: #d97706;
-      }
-      #json2table-toggle-view {
-        background: #8b5cf6;
-        color: white;
-      }
-      #json2table-toggle-view:hover {
-        background: #7c3aed;
-      }
-      #json2table-export {
-        background: #2563eb;
-        color: white;
-      }
-      #json2table-export:hover {
-        background: #1d4ed8;
-      }
-      #json2table-close {
-        background: #ef4444;
-        color: white;
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }      .json2table-content {
-        flex: 1;
-        overflow: hidden;
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-      }      #json2table-table-container {
-        flex: 1;
-        overflow: auto;
-        border: 1px solid #e5e7eb;
-        border-radius: 4px;
-        min-height: 0; /* Critical for flex scrolling */
-      }
-      #json2table-json-container {
-        flex: 1;
-        overflow: auto;
-        border: 1px solid #e5e7eb;
-        border-radius: 4px;
-        min-height: 0;
-        background: #f8f9fa;
-        padding: 20px;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 14px;
-        line-height: 1.6;
-      }      .json-content {
-        white-space: pre-wrap;
-        color: #333;
-        background: white;
-        padding: 0;
-        border-radius: 4px;
-        border: 1px solid #e5e7eb;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-      }
-      .json-header {
-        padding: 16px 20px;
-        border-bottom: 1px solid #e5e7eb;
-        background: #f8f9fa;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-radius: 4px 4px 0 0;
-      }
-      .json-header h3 {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 600;
-        color: #374151;
-      }
-      .copy-json-btn {
-        padding: 6px 12px;
-        background: #2563eb;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 500;
-      }
-      .copy-json-btn:hover {
-        background: #1d4ed8;
-      }
-      .json-code {
-        flex: 1;
-        padding: 20px;
-        margin: 0;
-        overflow: auto;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 13px;
-        line-height: 1.6;
-        background: white;
-      }      .json-string { color: var(--json-string-color, #059669); }
-      .json-number { color: var(--json-number-color, #dc2626); }
-      .json-boolean { color: var(--json-boolean-color, #7c3aed); font-weight: 600; }
-      .json-null { color: var(--json-null-color, #9ca3af); font-style: italic; }
-      .json-key { color: var(--json-key-color, #1d4ed8); font-weight: 600; }
-      .json2table-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      }
-      .json2table-table th {
-        background: #f9fafb;
-        padding: 12px 8px;
-        text-align: left;
-        border-bottom: 2px solid #e5e7eb;
-        font-weight: 600;
-        color: #374151;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-      }      .json2table-table td {
-        padding: 8px;
-        border-bottom: 1px solid #f3f4f6;
-        white-space: nowrap;
-        vertical-align: top;
-      }      .json2table-table tr:hover {
-        background: #f9fafb;
-      }
-      .clickable {
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-      .clickable:hover {
-        transform: scale(1.02);
-      }
-      .expandable-array {
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }      .expandable-array:hover {
-        transform: scale(1.05);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
-      .expandable-object {
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-      .expandable-object:hover {
-        transform: scale(1.05);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
-      .array-badge {
-        background: #ddd6fe;
-        color: #7c3aed;
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 600;
-        display: inline-block;
-        min-width: 70px;
-        text-align: center;
-        border: 1px solid #c4b5fd;
-      }
-      .object-badge {
-        background: #dbeafe;
-        color: #2563eb;
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: 600;
-        display: inline-block;
-        min-width: 80px;
-        text-align: center;
-      }
-      .empty-object {
-        color: #9ca3af;
-        font-style: italic;
-      }
+    // Iterative flattening function (replaces recursive approach)
+    static flattenJsonIterative(obj, prefix = '', maxDepth = 10) {
+      const result = {};
+      const stack = [{ obj, prefix, depth: 0 }];
       
-      /* Array expansion styles */
-      .array-expansion-container {
-        background: #f8fafc !important;
-      }
-      .array-expansion-cell {
-        padding: 0 !important;
-        border: none !important;
-      }
-      .array-table-wrapper {
-        margin: 8px 12px;
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      }
-      .array-table-header {
-        background: #f1f5f9;
-        padding: 8px 12px;
-        border-bottom: 1px solid #e2e8f0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .array-table-title {
-        font-weight: 600;
-        color: #475569;
-        font-size: 12px;
-      }
-      .collapse-array-btn {
-        background: #ef4444;
-        color: white;
-        border: none;
-        padding: 4px 8px;
-        border-radius: 3px;
-        font-size: 10px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-      .collapse-array-btn:hover {
-        background: #dc2626;
-        transform: scale(1.05);
-      }
-      .array-sub-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 11px;
-      }
-      .array-sub-header {
-        background: #f8fafc;
-      }
-      .array-sub-header th {
-        padding: 6px 8px;
-        text-align: left;
-        border-bottom: 1px solid #e2e8f0;
-        font-weight: 600;
-        color: #64748b;
-        font-size: 10px;
-        text-transform: uppercase;
-      }
-      .array-index-col {
-        width: 40px;
-        text-align: center;
-      }      .array-column-header {
-        min-width: 80px;
-      }
-      .array-sub-row:hover {
-        background: #e2e8f0;
-      }
-      .array-index-cell {
-        text-align: center;
-        color: #64748b;
-        font-weight: 500;
-        font-size: 10px;
-        width: 40px;
-        padding: 4px;
-      }      .array-sub-cell {
-        padding: 4px 8px;
-        border-bottom: 1px solid #f1f5f9;
-        white-space: nowrap;
-        font-size: 11px;
-      }
-      
-      /* Enhanced value formatting */      .null-value {
-        color: var(--muted-text);
-        font-style: italic;
-      }
-      .boolean-value {
-        font-weight: 600;
-      }
-      .boolean-value.true {
-        color: #059669;
-      }      .boolean-value.false {
-        color: #dc2626;
-      }
-      
-      /* Object expansion styles */
-      .object-expansion-container {
-        background: #f0f9ff !important;
-      }
-      .object-expansion-cell {
-        padding: 0 !important;
-        border: none !important;
-      }
-      .object-table-wrapper {
-        margin: 8px 12px;
-        background: white;
-        border: 1px solid #bfdbfe;
-        border-radius: 6px;
-        overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      }
-      .object-table-header {
-        background: #eff6ff;
-        padding: 8px 12px;
-        border-bottom: 1px solid #bfdbfe;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }      .object-table-title {
-        font-weight: 600;
-        color: #1d4ed8;
-        font-size: 12px;
-      }
-      .collapse-object-btn {
-        background: #ef4444;
-        color: white;
-        border: none;
-        padding: 4px 8px;
-        border-radius: 3px;
-        font-size: 10px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-      .collapse-object-btn:hover {
-        background: #dc2626;
-        transform: scale(1.05);
-      }
-      .object-sub-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 11px;
-      }
-      .object-sub-header {
-        background: #f8fafc;
-      }
-      .object-sub-header th {
-        padding: 6px 8px;
-        text-align: left;
-        border-bottom: 1px solid #e2e8f0;
-        font-weight: 600;
-        color: #475569;
-        font-size: 10px;
-        text-transform: uppercase;
-      }
-      .object-property-col {
-        width: 30%;
-        font-weight: 600;
-      }
-      .object-value-col {
-        width: 55%;
-      }      .object-type-col {
-        width: 15%;
-        text-align: center;
-      }
-      .object-sub-row:hover {
-        background: #e0f2fe;
-      }      .object-property-cell {
-        padding: 6px 8px;
-        font-weight: 600;
-        color: #1d4ed8;
-        font-size: 11px;
-        border-bottom: 1px solid #f1f5f9;
-      }.object-value-cell {
-        padding: 6px 8px;
-        border-bottom: 1px solid #f1f5f9;
-        white-space: nowrap;
-        font-size: 11px;
-      }
-      .object-type-cell {
-        padding: 6px 8px;
-        text-align: center;
-        font-size: 10px;
-        color: #64748b;
-        font-style: italic;
-        border-bottom: 1px solid #f1f5f9;
-      }
-      .array-header-row {
-        background: #f8fafc !important;
-        border-left: 3px solid #7c3aed;
-      }
-      .array-header-cell {
-        padding: 8px 12px !important;
-        background: #f1f5f9;
-        border-bottom: 2px solid #e5e7eb;
-        font-weight: 600;
-        color: #4c1d95;
-      }
-      .array-column-header {
-        display: inline-block;
-        background: white;
-        padding: 4px 8px;
-        margin: 0 4px 4px 0;
-        border-radius: 4px;
-        font-size: 10px;
-        color: #6b46c1;
-        border: 1px solid #ddd6fe;
-        font-weight: 600;
-      }
-      .array-item-row {
-        background: #fefbff !important;
-        border-left: 3px solid #c4b5fd;
-      }
-      .array-item-row:hover {
-        background: #f5f3ff !important;
-      }
-      .array-item-cell {
-        padding: 6px 12px !important;
-        font-size: 12px;
-      }
-      .array-cell-value {
-        display: inline-block;
-        background: #f8fafc;
-        padding: 2px 6px;
-        margin: 0 4px 2px 0;        border-radius: 3px;
-        font-size: 11px;        color: #1e293b;
-        border: 1px solid #e2e8f0;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        white-space: nowrap;
-      }
-      .array-spacer {
-        background: #fafafa;
-        border-left: 1px solid #f0f0f0;
-      }
-      .main-row {
-        border-bottom: 1px solid #e5e7eb;
-      }
-      
-      /* Optimized Modal Styles */
-      .json2table-value-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 1000000;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      }
-      .modal-backdrop {
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.75);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-      }
-      .modal-content {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-        max-width: 800px;
-        max-height: 80vh;
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-      }
-      .modal-header {
-        padding: 20px 24px;
-        border-bottom: 1px solid #e5e7eb;
-        background: #f9fafb;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-radius: 12px 12px 0 0;
-      }
-      .modal-header h3 {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 600;
-        color: #1f2937;
-      }
-      .modal-close {
-        background: #ef4444;
-        color: white;
-        border: none;
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        cursor: pointer;
-        font-size: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background 0.15s ease;
-      }
-      .modal-close:hover {
-        background: #dc2626;
-      }
-      .modal-body {
-        flex: 1;
-        overflow-y: auto;
-        padding: 24px;
-      }
-      .content-header {
-        font-size: 14px;
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 16px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #f3f4f6;
-      }
-      .array-items, .object-properties {
-        max-height: 400px;
-        overflow-y: auto;
-      }
-      .array-item, .object-property {
-        padding: 8px 12px;
-        border-radius: 6px;
-        margin-bottom: 4px;
-        background: #f8fafc;
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-      }
-      .item-index, .property-key {
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 12px;
-        font-weight: 600;
-        color: #6b7280;
-        flex-shrink: 0;
-      }      .item-value, .property-value {
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 12px;
-        flex: 1;
-      }
-      .string-value { color: #059669; }
-      .number-value { color: #dc2626; }
-      .boolean-value { color: #7c3aed; }
-      .null-value, .undefined-value { color: var(--muted-text); font-style: italic; }
-      .nested-array, .nested-object { color: #2563eb; }      .empty-state {
-        text-align: center;
-        color: var(--muted-text);
-        font-style: italic;
-        padding: 40px;
-      }
-      .pagination-info {
-        margin-top: 16px;
-        padding: 12px;
-        background: #eff6ff;
-        border-radius: 6px;
-        font-size: 13px;
-        color: #1d4ed8;
-        text-align: center;
-      }
-    `;
-    
-    document.head.appendChild(style);
-    document.body.appendChild(viewer);    // Initialize table
-    const tableViewer = new TableViewer(data);
-    tableViewer.render();
-
-    // Check if auto-expand is enabled and expand all automatically
-    AutoJSONDetector.getSettings().then(settings => {
-      if (settings.autoExpand) {
-        // Small delay to ensure table is fully rendered
-        setTimeout(() => {
-          tableViewer.expandAll();
-        }, 100);
-      }
-    });    // Event listeners
-    document.getElementById('json2table-close').onclick = () => viewer.remove();
-    document.getElementById('json2table-search').oninput = (e) => tableViewer.search(e.target.value);
-    document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
-    document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
-    document.getElementById('json2table-toggle-view').onclick = () => toggleView(data);
-    document.getElementById('json2table-export').onclick = () => tableViewer.exportCSV();
-
-    // Toggle view functionality
-    let isJsonView = false;
-    function toggleView(jsonData) {
-      const tableContainer = document.getElementById('json2table-table-container');
-      const jsonContainer = document.getElementById('json2table-json-container');
-      const toggleButton = document.getElementById('json2table-toggle-view');
-      const searchInput = document.getElementById('json2table-search');
-      const expandButton = document.getElementById('json2table-expand-all');
-      const collapseButton = document.getElementById('json2table-collapse-all');
-
-      if (!isJsonView) {
-        // Switch to JSON view
-        tableContainer.style.display = 'none';
-        jsonContainer.style.display = 'block';
-        toggleButton.textContent = 'Table View';
+      while (stack.length > 0) {
+        const { obj: current, prefix: currentPrefix, depth } = stack.pop();
         
-        // Disable table-specific controls
-        searchInput.disabled = true;
-        expandButton.disabled = true;
-        collapseButton.disabled = true;        // Render formatted JSON with syntax highlighting
-        const formattedJson = JSON.stringify(jsonData, null, 2);
-        jsonContainer.innerHTML = `
-          <div class="json-content">
-            <div class="json-header">
-              <h3>Formatted JSON Data (${jsonData.length} items)</h3>
-              <button class="copy-json-btn" onclick="copyJsonToClipboard()">Copy JSON</button>
-            </div>
-            <pre class="json-code">${syntaxHighlightJson(formattedJson)}</pre>
-          </div>
-        `;
-        
-        // Store JSON data for copying
-        window.currentJsonData = formattedJson;
-        
-        isJsonView = true;
-      } else {
-        // Switch to table view
-        tableContainer.style.display = 'block';
-        jsonContainer.style.display = 'none';
-        toggleButton.textContent = 'JSON View';
-        
-        // Re-enable table-specific controls
-        searchInput.disabled = false;
-        expandButton.disabled = false;
-        collapseButton.disabled = false;
-          isJsonView = false;
-      }
-    }    // Syntax highlighting for JSON
-    function syntaxHighlightJson(json) {
-      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-        let cls = 'number';
-        if (/^"/.test(match)) {
-          if (/:$/.test(match)) {
-            cls = 'key';
-          } else {
-            cls = 'string';
-          }
-        } else if (/true|false/.test(match)) {
-          cls = 'boolean';
-        } else if (/null/.test(match)) {
-          cls = 'null';
+        if (depth > maxDepth) {
+          result[currentPrefix || 'deep_object'] = '[Max depth reached]';
+          continue;
         }
-        return '<span class="json-' + cls + '">' + match + '</span>';
-      });
-    }
-
-    // Copy JSON to clipboard
-    window.copyJsonToClipboard = function() {
-      if (window.currentJsonData) {
-        navigator.clipboard.writeText(window.currentJsonData).then(() => {
-          const btn = document.querySelector('.copy-json-btn');
-          const originalText = btn.textContent;
-          btn.textContent = 'Copied!';
-          btn.style.background = '#10b981';
-          setTimeout(() => {
-            btn.textContent = originalText;
-            btn.style.background = '#2563eb';
-          }, 2000);
-        }).catch(err => {
-          console.error('Failed to copy: ', err);
-        });
+        
+        if (current === null || current === undefined) {
+          result[currentPrefix] = current;
+          continue;
+        }
+        
+        if (typeof current !== 'object') {
+          result[currentPrefix] = current;
+          continue;
+        }
+        
+        if (Array.isArray(current)) {
+          if (current.length === 0) {
+            result[currentPrefix] = '[]';
+          } else if (current.length <= 100) { // Limit array processing
+            current.forEach((item, index) => {
+              const newKey = currentPrefix ? `${currentPrefix}[${index}]` : `[${index}]`;
+              stack.push({ obj: item, prefix: newKey, depth: depth + 1 });
+            });
+          } else {
+            result[currentPrefix] = `[${current.length} items - too large to flatten]`;
+          }
+        } else {
+          const keys = Object.keys(current);
+          if (keys.length === 0) {
+            result[currentPrefix] = '{}';
+          } else if (keys.length <= 50) { // Limit object processing
+            keys.forEach(key => {
+              const newKey = currentPrefix ? `${currentPrefix}.${key}` : key;
+              stack.push({ obj: current[key], prefix: newKey, depth: depth + 1 });
+            });
+          } else {
+            result[currentPrefix] = `{${keys.length} properties - too large to flatten}`;
+          }
+        }
       }
-    };
+      
+      return result;
+    }
   }
 
-  // Ultra-high-performance table viewer with expandable arrays
-  class TableViewer {
+  // Optimized Table Viewer with virtual scrolling and enhanced performance
+  class OptimizedTableViewer {
     constructor(data) {
       this.originalData = data;
       this.filteredData = data;
       this.container = document.getElementById('json2table-table-container');
-      this.rowHeight = 45; // Base row height
-      this.visibleRows = Math.ceil(window.innerHeight / this.rowHeight) + 5;
-      this.scrollTop = 0;
+      this.rowHeight = 45;
       this.columns = this.extractColumns(data);
       
-      // Add stable row IDs that don't change when filtering
+      // Virtual scrolling configuration
+      this.virtualScrolling = data.length > 1000; // Enable for large datasets
+      this.visibleRows = Math.ceil(window.innerHeight / this.rowHeight) + 10;
+      this.bufferSize = 5; // Extra rows to render above/below viewport
+      
+      // Add stable row IDs
       this.originalData = data.map((row, index) => ({
         ...row,
-        __rowId: index // Stable identifier for expansions
+        __rowId: index
       }));
-      this.filteredData = this.originalData;      // Array expansion tracking
-      this.expandedArrays = new Set(); // Track which arrays are expanded
-      this.arrayRowHeights = new Map(); // Track additional height per expanded array
+      this.filteredData = this.originalData;
+
+      // Performance optimizations
+      this.expandedArrays = new Set();
       this.renderCache = new Map();
-      this.modalOverlay = null;
+      this.maxCacheSize = 500;
+      
+      // Throttling and debouncing
       this.lastRenderTime = 0;
       this.renderThrottle = 16;
-      this.rafId = null; // For requestAnimationFrame scroll handling
-      this.boundScrollHandler = null; // Bound scroll handler reference
+      this.rafId = null;
+      
+      // Event delegation
+      this.boundScrollHandler = PerformanceUtils.throttle(this.handleScroll.bind(this), 16);
+      this.boundClickHandler = this.handleDelegatedClick.bind(this);
+      
+      // Cleanup tracking
+      this.eventListeners = [];
     }
 
     extractColumns(data) {
-      // Ensure data is an array
       if (!Array.isArray(data) || data.length === 0) {
         return [];
       }
       
       const columnSet = new Set();
-      data.slice(0, 100).forEach(row => { // Sample first 100 rows for columns
+      const sampleSize = Math.min(data.length, 200);
+      data.slice(0, sampleSize).forEach(row => {
         if (row && typeof row === 'object') {
-          Object.keys(row).forEach(key => columnSet.add(key));
+          Object.keys(row).forEach(key => {
+            if (key !== '__rowId') {
+              columnSet.add(key);
+            }
+          });
         }
       });
       return Array.from(columnSet);
     }
 
     render() {
-      // Simple render - no virtual scrolling, just render all rows
+      if (this.virtualScrolling) {
+        this.renderVirtualized();
+      } else {
+        this.renderStandard();
+      }
+      
+      this.attachOptimizedEventListeners();
+    }
+
+    renderVirtualized() {
+      const containerHeight = this.calculateTotalHeight();
+      
+      const html = `
+        <div class="virtual-scroll-container" style="height: 100%; overflow-y: auto;">
+          <table class="json2table-table">
+            <thead>
+              <tr>
+                ${this.columns.map(col => `<th title="${col}">${this.formatColumnName(col)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody id="virtual-tbody">
+              ${this.renderAllRows()}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      this.container.innerHTML = html;
+    }
+
+    renderStandard() {
       const html = `
         <table class="json2table-table">
-          <thead style="position: sticky; top: 0; z-index: 1000; background: var(--header-bg); box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <thead>
             <tr>
               ${this.columns.map(col => `<th title="${col}">${this.formatColumnName(col)}</th>`).join('')}
             </tr>
@@ -1841,11 +1099,13 @@
       `;
 
       this.container.innerHTML = html;
-      this.attachOptimizedEventListeners();
+    }
+
+    calculateTotalHeight() {
+      return this.filteredData.length * this.rowHeight;
     }
 
     renderAllRows() {
-      // Simply render all rows without any virtual scrolling complexity
       let html = '';
       for (let i = 0; i < this.filteredData.length; i++) {
         const row = this.filteredData[i];
@@ -1854,1019 +1114,427 @@
       return html;
     }
 
-    calculateDynamicHeight() {
-      // Simplified: Use base row height for all rows, add expansion estimates
-      const baseHeight = this.filteredData.length * this.rowHeight;
-      const expansionHeight = this.expandedArrays.size * 100; // Estimate 100px per expansion
-      return baseHeight + expansionHeight;
-    }
-
-    calculateVisibleRange() {
-      // Simplified virtual scrolling calculation
-      const rowHeight = this.rowHeight;
-      const startIndex = Math.max(0, Math.floor(this.scrollTop / rowHeight) - 5);
-      const endIndex = Math.min(
-        this.filteredData.length,
-        startIndex + Math.ceil(window.innerHeight / rowHeight) + 10
-      );
-      
-      return { startIndex, endIndex };
-    }
-
-    calculateOffsetTop(startIndex) {
-      // Always use consistent calculation for smooth scrolling
-      return startIndex * this.rowHeight;
-    }
-
-    renderRowsWithExpansions(startIndex, endIndex) {
-      let html = '';
-      for (let i = startIndex; i < endIndex; i++) {
-        const row = this.filteredData[i];
-        // Only render main row since expansions are now inline
-        html += this.renderMainRow(row, i);
-      }
-      return html;
-    }
-
     renderMainRow(row, rowIndex) {
-      const stableRowId = row.__rowId; // Use stable ID instead of changing row index
+      const stableRowId = row.__rowId;
+      
       return `
-        <tr data-row-index="${rowIndex}" class="main-row">
+        <tr data-row-index="${rowIndex}" data-row-id="${stableRowId}" class="main-row">
           ${this.columns.map(col => {
             const value = row[col];
-            const cellContent = this.formatCellValueWithExpansion(value, stableRowId, col);
-            // Determine if this cell needs wide content class
-            const isWideContent = this.shouldUseWideContent(value, cellContent);
-            const widthClass = isWideContent ? ' wide-content' : '';
-            return `<td class="json2table-cell${widthClass}" data-col="${col}" data-row="${rowIndex}">
+            const cellContent = this.formatCellValue(value);
+            const isLongText = this.isLongTextContent(value);
+            const cellClass = isLongText ? 'json2table-cell long-text-content' : 'json2table-cell';
+            return `<td class="${cellClass}" data-col="${col}">
               ${cellContent}
             </td>`;
           }).join('')}
-        </tr>      `;
-    }    shouldUseWideContent(value, cellContent, context = 'main-table') {
-      // Single digits, booleans, short numbers don't need wide columns
-      if (typeof value === 'number' && Math.abs(value) < 1000) return false;
-      if (typeof value === 'boolean') return false;
-      if (value === null || value === undefined) return false;        // Arrays and objects don't need wide content for expansion
-      // since they have their own inline expansion mechanism
-      if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
-        return false; // No wide content for any expandable content
-      }
-      
-      // String content - check length
-      if (typeof value === 'string') {
-        // Check if this string is an image URL - images don't need wide columns
-        if (this.isImageUrl(value)) return false;
-        // Short strings (like IDs, status, single words) don't need wide columns
-        if (value.length <= 10) return false;
-        // Medium strings might need some width
-        if (value.length <= 30) return false;
-        // Long strings definitely need wide columns
-        return true;
-      }
-      
-      // For rendered HTML content, check if it contains expansion elements
-      if (typeof cellContent === 'string') {
-        if (cellContent.includes('expandable-array') || cellContent.includes('expandable-object')) return true;
-        // Check if this is image content - images don't need wide columns since they're constrained to 60px
-        if (cellContent.includes('image-value-container') || cellContent.includes('inline-image')) return false;
-        // Long rendered content
-        if (cellContent.length > 50) return true;
-      }
-      
-      return false;
+        </tr>
+      `;
     }
 
-    getArrayColumns(arrayItems) {
-      const columnSet = new Set();
-      const columnPriority = new Map();
-      
-      // Sample more items for better column detection
-      const sampleSize = Math.min(50, arrayItems.length);
-      const sampleItems = arrayItems.slice(0, sampleSize);
-      
-      sampleItems.forEach((item, index) => {
-        if (typeof item === 'object' && item !== null) {
-          Object.keys(item).forEach(key => {
-            columnSet.add(key);
-            // Count frequency for prioritization
-            columnPriority.set(key, (columnPriority.get(key) || 0) + 1);
-          });
-        } else {
-          columnSet.add('value'); // For primitive arrays
-        }
-      });
-      
-      // Convert to array and sort by priority (frequency) and common field names
-      const columns = Array.from(columnSet).sort((a, b) => {
-        // Prioritize common important fields first
-        const priorityFields = ['id', 'name', 'title', 'rating', 'comment', 'date', 'price', 'description'];
-        const aPriority = priorityFields.indexOf(a.toLowerCase());
-        const bPriority = priorityFields.indexOf(b.toLowerCase());
-        
-        if (aPriority !== -1 && bPriority !== -1) {
-          return aPriority - bPriority;
-        }
-        if (aPriority !== -1) return -1;
-        if (bPriority !== -1) return 1;
-        
-        // Then sort by frequency
-        const aFreq = columnPriority.get(a) || 0;
-        const bFreq = columnPriority.get(b) || 0;
-        
-        return bFreq - aFreq;
-      });
-      
-      // Limit to 10 columns for better display
-      return columns.slice(0, 10);
-    }
-
-    formatArrayCellValue(value) {
-      if (value === null || value === undefined) return '<span class="null-value">-</span>';
-      
-      const stringValue = String(value);
-      
-      // Format dates
-      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
-        try {
-          const date = new Date(value);
-          return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        } catch (e) {
-          // Fall through to regular formatting
-        }
+    formatCellValue(value) {
+      if (value === null || value === undefined) {
+        return '<span class="null-value">null</span>';
       }
       
-      // Format booleans
       if (typeof value === 'boolean') {
-        return `<span class="boolean-value ${value ? 'true' : 'false'}">${value ? '✓' : '✗'}</span>`;
+        return `<span class="boolean-value ${value}">${value}</span>`;
       }
       
-      // Format numbers
       if (typeof value === 'number') {
-        return value % 1 === 0 ? value.toString() : value.toFixed(2);
+        return `<span class="number-value">${value}</span>`;
       }
-        // Return full string for complete text selection
-      return stringValue;
-    }
-
-    escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    formatObjectPropertyValue(value) {
-      if (value === null || value === undefined) return '<span class="null-value">-</span>';
-      
-      const stringValue = String(value);
-      
-      // Format dates
-      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
-        try {
-          const date = new Date(value);
-          return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        } catch (e) {
-          // Fall through to regular formatting
-        }
-      }
-      
-      // Format booleans
-      if (typeof value === 'boolean') {
-        return `<span class="boolean-value ${value ? 'true' : 'false'}">${value ? '✓' : '✗'}</span>`;
-      }
-      
-      // Format numbers
-      if (typeof value === 'number') {
-        return value % 1 === 0 ? value.toString() : value.toFixed(2);
-      }
-      
-      // Handle arrays and objects
-      if (Array.isArray(value)) {
-        return `<span class="nested-array">[${value.length} items]</span>`;
-      }
-      
-      if (typeof value === 'object' && value !== null) {
-        return `<span class="nested-object">{${Object.keys(value).length} props}</span>`;
-      }
-        // Return full string for complete text selection
-      return stringValue;
-    }
-
-    getValueType(value) {
-      if (value === null) return 'null';
-      if (value === undefined) return 'undefined';
-      if (Array.isArray(value)) return 'array';
-      return typeof value;
-    }    formatCellValueWithExpansion(value, rowIndex, col) {
-      if (value === null || value === undefined) return '';
       
       if (Array.isArray(value)) {
-        const count = value.length;
-        const arrayKey = `${rowIndex}-${col}`;
-        const isExpanded = this.expandedArrays.has(arrayKey);
-        const expandIcon = isExpanded ? '[-]' : '[+]';
-        
-        let html = `<span class="array-badge expandable-array" data-array-key="${arrayKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} array">
-          ${expandIcon} [${count}] ${count === 1 ? 'item' : 'items'}
+        return `<span class="expandable-array" data-type="array" data-length="${value.length}">
+          Array[${value.length}]
         </span>`;
-          // Add inline expansion content
-        if (isExpanded && value.length > 0) {
-          const arrayColumns = this.getArrayColumns(value);
-          html += `
-            <div class="inline-array-expansion" data-array-key="${arrayKey}">
-              <div class="inline-expansion-header">Array Items (${count}):</div>
-              <div class="inline-array-table-wrapper">
-                <table class="inline-table">
-                  <thead>
-                    <tr>
-                      ${arrayColumns.map(col => `<th>${this.formatColumnName(col)}</th>`).join('')}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${value.map((item, itemIndex) => {
-                      if (typeof item === 'object' && item !== null) {
-                        return `<tr class="inline-table-row">
-                          ${arrayColumns.map(acol => {
-                            const cellValue = item[acol];
-                            return `<td class="inline-table-cell">${cellValue !== undefined ? this.highlightSearchTerm(this.formatArrayCellValue(cellValue)) : '<span class="null-value">-</span>'}</td>`;
-                          }).join('')}
-                        </tr>`;                      } else {
-                        return `<tr class="inline-table-row">
-                          <td class="inline-table-cell" colspan="${arrayColumns.length}">
-                            <span class="inline-value">${this.highlightSearchTerm(this.formatInlineValue(item))}</span>
-                          </td>
-                        </tr>`;
-                      }
-                    }).join('')}
-                  </tbody>
-                </table>
-              </div>
-            </div>`;
-        }
-        
-        return html;
-      }
-      
-      if (typeof value === 'object') {
-        const propCount = Object.keys(value).length;
-        if (propCount === 0) return '<span class="empty-object">{}</span>';
-        
-        const objectKey = `${rowIndex}-${col}-object`;
-        const isExpanded = this.expandedArrays.has(objectKey); // Reuse same tracking set
-        const expandIcon = isExpanded ? '[-]' : '[+]';
-        
-        let html = `<span class="object-badge expandable-object" data-object-key="${objectKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} object properties">
-          ${expandIcon} {${propCount}} ${propCount === 1 ? 'property' : 'properties'}
-        </span>`;
-          // Add inline expansion content in table format
-        if (isExpanded) {
-          html += `
-            <div class="inline-object-expansion" data-object-key="${objectKey}">
-              <div class="inline-expansion-header">Properties (${propCount}):</div>
-              <div class="inline-object-table-wrapper">
-                <table class="inline-table">
-                  <thead>
-                    <tr>
-                      <th>Property</th>
-                      <th>Value</th>
-                    </tr>
-                  </thead>                  <tbody>                    ${Object.entries(value).map(([key, val]) => {
-                      // Determine if this property value needs wide content class (inline context)
-                      const isWideContent = this.shouldUseWideContent(val, null, 'inline-table');
-                      const widthClass = isWideContent ? ' wide-content' : '';
-                      
-                      return `<tr class="inline-table-row">
-                        <td class="inline-table-cell inline-property-name">${this.highlightSearchTerm(key)}</td>
-                        <td class="inline-table-cell inline-property-value${widthClass}">${this.highlightSearchTerm(this.formatInlineValue(val, rowIndex, col, key))}</td>
-                      </tr>`;
-                    }).join('')}
-                  </tbody>
-                </table>
-              </div>
-            </div>`;
-        }
-        
-        return html;      }
-        const stringValue = String(value);
-      
-      // Check if the string value is an image URL
-      if (this.isImageUrl(stringValue)) {
-        return this.renderImageValue(stringValue);
-      }
-      
-      // Apply search highlighting to the value
-      return this.highlightSearchTerm(stringValue);
-    }
-
-    formatInlineValue(value, parentRowIndex = null, parentCol = null, nestedKey = null) {
-      if (value === null || value === undefined) return '<span class="null-value">null</span>';
-      
-      if (Array.isArray(value)) {
-        // For nested arrays, make them expandable too
-        if (parentRowIndex !== null && parentCol !== null && nestedKey !== null) {
-          const nestedArrayKey = `${parentRowIndex}-${parentCol}-${nestedKey}-array`;
-          const isExpanded = this.expandedArrays.has(nestedArrayKey);
-          const expandIcon = isExpanded ? '[-]' : '[+]';
-          
-          let html = `<span class="array-badge expandable-array" data-array-key="${nestedArrayKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} nested array">
-            ${expandIcon} [${value.length} items]
-          </span>`;
-          
-          if (isExpanded && value.length > 0) {
-            const arrayColumns = this.getArrayColumns(value);
-            html += `
-              <div class="inline-array-expansion" data-array-key="${nestedArrayKey}" style="margin-top: 4px;">
-                <div class="inline-expansion-header" style="font-size: 10px;">Nested Array (${value.length}):</div>
-                <div class="inline-array-table-wrapper">
-                  <table class="inline-table" style="font-size: 10px;">
-                    <thead>
-                      <tr>
-                        ${arrayColumns.map(col => `<th style="font-size: 9px;">${this.formatColumnName(col)}</th>`).join('')}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${value.map((item, itemIndex) => {
-                        if (typeof item === 'object' && item !== null) {
-                          return `<tr class="inline-table-row">
-                            ${arrayColumns.map(acol => {
-                              const cellValue = item[acol];
-                              return `<td class="inline-table-cell">${cellValue !== undefined ? this.formatArrayCellValue(cellValue) : '<span class="null-value">-</span>'}</td>`;
-                            }).join('')}
-                          </tr>`;                        } else {
-                          return `<tr class="inline-table-row">
-                            <td class="inline-table-cell" colspan="${arrayColumns.length}">
-                              <span class="inline-value">${this.formatInlineValue(item)}</span>
-                            </td>
-                          </tr>`;
-                        }
-                      }).join('')}
-                    </tbody>
-                  </table>
-                </div>
-              </div>`;
-          }
-          
-          return html;
-        }
-        
-        return `<span class="nested-array">[${value.length} items]</span>`;
       }
       
       if (typeof value === 'object') {
         const keys = Object.keys(value);
+        return `<span class="expandable-object" data-type="object" data-keys="${keys.length}">
+          Object{${keys.length}}
+        </span>`;
+      }
+      
+      // String values - sanitize for security
+      const sanitized = ErrorHandler.sanitizeInput(String(value));
+      return `<span class="string-value">${sanitized}</span>`;
+    }
+
+    isLongTextContent(value) {
+      // Only apply max-width to string values that are longer than 100 characters
+      if (typeof value === 'string') {
+        return value.length > 100;
+      }
+      return false;
+    }
+
+    formatColumnName(col) {
+      return ErrorHandler.sanitizeInput(col);
+    }
+
+    handleDelegatedClick(event) {
+      const target = event.target;
+      
+      if (target.classList.contains('expandable-array') || target.classList.contains('expandable-object')) {
+        event.preventDefault();
+        this.handleExpansionClick(target);
+      }
+    }
+
+    handleExpansionClick(target) {
+      const cell = target.closest('td');
+      const rowElement = target.closest('tr');
+      const rowIndex = parseInt(rowElement.dataset.rowIndex);
+      const colName = cell.dataset.col;
+      const row = this.filteredData[rowIndex];
+      const value = row[colName];
+      
+      const expandedContainerId = `expanded-content-${rowElement.dataset.rowId}-${colName}`;
+      
+      // Check if already expanded
+      const existingExpanded = cell.querySelector('.expanded-content-inline');
+      if (existingExpanded) {
+        // Collapse - remove the expanded content and restore original
+        existingExpanded.remove();
+        target.textContent = target.dataset.type === 'array' 
+          ? `Array[${target.dataset.length}]`
+          : `Object{${target.dataset.keys}}`;
         
-        // For nested objects, make them expandable
-        if (parentRowIndex !== null && parentCol !== null && nestedKey !== null) {
-          const nestedObjectKey = `${parentRowIndex}-${parentCol}-${nestedKey}-object`;
-          const isExpanded = this.expandedArrays.has(nestedObjectKey);
-          const expandIcon = isExpanded ? '[-]' : '[+]';
-          
-          let html = `<span class="object-badge expandable-object" data-object-key="${nestedObjectKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} nested object">
-            ${expandIcon} {${keys.length} props}
-          </span>`;
-          
-          if (isExpanded) {
-            html += `
-              <div class="inline-object-expansion" data-object-key="${nestedObjectKey}" style="margin-top: 4px;">
-                <div class="inline-expansion-header" style="font-size: 10px;">Nested Object (${keys.length}):</div>
-                <div class="inline-object-table-wrapper">
-                  <table class="inline-table" style="font-size: 10px;">
-                    <thead>
-                      <tr>
-                        <th style="font-size: 9px;">Property</th>
-                        <th style="font-size: 9px;">Value</th>
-                      </tr>
-                    </thead>                    <tbody>
-                      ${Object.entries(value).map(([key, val]) => {
-                        // Apply smart width logic to nested object property values (inline context)
-                        const isWideContent = this.shouldUseWideContent(val, null, 'inline-table');
-                        const widthClass = isWideContent ? ' wide-content' : '';
-                        
-                        return `<tr class="inline-table-row">
-                          <td class="inline-table-cell inline-property-name" style="font-size: 10px;">${key}</td>
-                          <td class="inline-table-cell inline-property-value${widthClass}" style="font-size: 10px;">${this.formatInlineValue(val, parentRowIndex, parentCol, `${nestedKey}-${key}`)}</td>
-                        </tr>`;
-                      }).join('')}
-                    </tbody>
-                  </table>
-                </div>
-              </div>`;
-          }
-          
-          return html;
+        // Remove expanded styling from cell
+        cell.classList.remove('cell-expanded');
+        return;
+      }
+      
+      // Expand - create inline expanded content
+      const expandedContent = this.formatExpandedContent(value, colName);
+      const expandedDiv = document.createElement('div');
+      expandedDiv.className = 'expanded-content-inline';
+      expandedDiv.id = expandedContainerId;
+      expandedDiv.innerHTML = `
+        <div class="expanded-content-wrapper">
+          <div class="expanded-header-inline">
+            <strong>${colName}</strong>
+          </div>
+          <div class="expanded-data-inline">
+            ${expandedContent}
+          </div>
+        </div>
+      `;
+      
+      // Add expanded content after the trigger element
+      target.parentNode.insertBefore(expandedDiv, target.nextSibling);
+      
+      // Update the trigger text and add expanded styling to cell
+      target.textContent = target.dataset.type === 'array' 
+        ? `Array[${target.dataset.length}] ▼`
+        : `Object{${target.dataset.keys}} ▼`;
+      
+      cell.classList.add('cell-expanded');
+    }
+
+    formatExpandedContent(value, colName) {
+      if (Array.isArray(value)) {
+        if (value.length === 0) {
+          return '<em>Empty array</em>';
         }
         
-        // For simple objects with few properties, show them inline
-        if (keys.length <= 4) {
-          const props = keys.map(key => {
-            const propValue = value[key];
-            let displayValue;
-            
-            // Handle nested values more gracefully
-            if (typeof propValue === 'object' && propValue !== null) {
-              if (Array.isArray(propValue)) {
-                displayValue = `[${propValue.length} items]`;
-              } else {
-                displayValue = `{${Object.keys(propValue).length} props}`;
-              }
-            } else if (typeof propValue === 'string' && propValue.length > 30) {
-              displayValue = propValue.substring(0, 30) + '...';
-            } else {
-              displayValue = String(propValue);
-            }
-            
-            return `<strong>${key}:</strong> ${displayValue}`;
-          }).join(', ');
-          
-          return `<span class="nested-object-detailed">{${props}}</span>`;
-        } else {
-          // For complex objects, show summary
-          return `<span class="nested-object">{${keys.length} props}</span>`;
+        // For arrays of objects, show as mini-table
+        if (value.length > 0 && typeof value[0] === 'object' && !Array.isArray(value[0])) {
+          return this.formatArrayAsTable(value);
         }
+        
+        // For simple arrays, show as list
+        return this.formatArrayAsList(value);
+      }
+      
+      if (typeof value === 'object' && value !== null) {
+        return this.formatObjectAsProperties(value);
+      }
+      
+      return ErrorHandler.sanitizeInput(String(value));
+    }
+
+    formatArrayAsTable(array) {
+      const maxItems = 100; // Limit for performance
+      const displayArray = array.slice(0, maxItems);
+      
+      // Get all unique keys from all objects
+      const allKeys = new Set();
+      displayArray.forEach(item => {
+        if (item && typeof item === 'object') {
+          Object.keys(item).forEach(key => allKeys.add(key));
+        }
+      });
+      
+      const keys = Array.from(allKeys).slice(0, 10); // Limit columns
+      
+      let html = `
+        <table class="expanded-table">
+          <thead>
+            <tr>${keys.map(key => `<th>${ErrorHandler.sanitizeInput(key)}</th>`).join('')}</tr>
+          </thead>
+          <tbody>
+      `;
+      
+      displayArray.forEach((item, index) => {
+        html += '<tr>';
+        keys.forEach(key => {
+          const cellValue = item && typeof item === 'object' ? item[key] : '';
+          html += `<td>${this.formatSimpleValue(cellValue)}</td>`;
+        });
+        html += '</tr>';
+      });
+      
+      html += '</tbody></table>';
+      
+      if (array.length > maxItems) {
+        html += `<div class="truncated-notice">... and ${array.length - maxItems} more items</div>`;
+      }
+      
+      return html;
+    }
+
+    formatArrayAsList(array) {
+      const maxItems = 50;
+      const displayArray = array.slice(0, maxItems);
+      
+      let html = '<ul class="expanded-list">';
+      displayArray.forEach((item, index) => {
+        html += `<li><strong>[${index}]:</strong> ${this.formatSimpleValue(item)}</li>`;
+      });
+      html += '</ul>';
+      
+      if (array.length > maxItems) {
+        html += `<div class="truncated-notice">... and ${array.length - maxItems} more items</div>`;
+      }
+      
+      return html;
+    }
+
+    formatObjectAsProperties(obj) {
+      const keys = Object.keys(obj);
+      const maxKeys = 50;
+      const displayKeys = keys.slice(0, maxKeys);
+      
+      let html = '<table class="expanded-properties">';
+      displayKeys.forEach(key => {
+        const value = obj[key];
+        html += `
+          <tr>
+            <td class="property-key"><strong>${ErrorHandler.sanitizeInput(key)}:</strong></td>
+            <td class="property-value">${this.formatSimpleValue(value)}</td>
+          </tr>
+        `;
+      });
+      html += '</table>';
+      
+      if (keys.length > maxKeys) {
+        html += `<div class="truncated-notice">... and ${keys.length - maxKeys} more properties</div>`;
+      }
+      
+      return html;
+    }
+
+    formatSimpleValue(value) {
+      if (value === null || value === undefined) {
+        return '<span class="null-value">null</span>';
       }
       
       if (typeof value === 'boolean') {
-        return `<span class="boolean-value ${value}">${value ? '✓' : '✗'}</span>`;
+        return `<span class="boolean-value">${value}</span>`;
       }
       
-      // Format dates
-      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
-        try {
-          const date = new Date(value);
-          return `<span class="date-value">${date.toLocaleDateString()}</span>`;
-        } catch (e) {
-          // Fall through to regular formatting
-        }      }
-      
-      // Truncate very long strings (but check for images first)
-      if (typeof value === 'string') {
-        // Check if it's an image URL first
-        if (this.isImageUrl(value)) {
-          return this.renderImageValue(value);
-        }
-        // Then check for length truncation
-        if (value.length > 50) {
-          return value.substring(0, 50) + '...';
-        }
-      }
-        const stringValue = String(value);
-      // Return full string for complete text selection
-      return stringValue;
-    }
-
-    highlightSearchTerm(text) {
-      // If no search query or text is not a string, return as is
-      if (!this.searchQuery || typeof text !== 'string') {
-        return text;
+      if (typeof value === 'number') {
+        return `<span class="number-value">${value}</span>`;
       }
       
-      // Create a case-insensitive regex to find all matches
-      const regex = new RegExp(`(${this.escapeRegex(this.searchQuery)})`, 'gi');
-      
-      // Replace matches with highlighted spans
-      return text.replace(regex, '<mark class="search-highlight">$1</mark>');
-    }    escapeRegex(string) {
-      // Escape special regex characters
-      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }    isImageUrl(url) {
-      // Check if the URL string looks like an image
-      if (typeof url !== 'string') return false;
-      
-      // Check for base64 encoded images
-      if (/^data:image\/(jpeg|jpg|png|gif|webp|svg\+xml|bmp);base64,/i.test(url)) {
-        return true;
-      }
-      
-      // Check for base64 strings that might be images (common JPEG header)
-      if (/^\/9j\//.test(url) || /^iVBORw0KGgo/.test(url) || /^R0lGOD/.test(url)) {
-        return true;
-      }
-      
-      // Must be a valid URL pattern for regular URLs
-      if (!/^https?:\/\/.+/i.test(url)) return false;
-      
-      // Check for image file extensions
-      const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i;
-      if (imageExtensions.test(url)) return true;
-      
-      // Check for common image hosting patterns
-      const imageHostPatterns = [
-        /cdn\..*\.(jpg|jpeg|png|gif|webp|svg)/i,
-        /images?\./i,
-        /img\./i,
-        /photo/i,
-        /picture/i,
-        /thumbnail/i,
-        /avatar/i
-      ];
-      
-      return imageHostPatterns.some(pattern => pattern.test(url));
-    }    renderImageValue(imageUrl) {
-      // Determine if it's a base64 image and format the src accordingly
-      let imageSrc = imageUrl;
-      let displayUrl = imageUrl;
-      
-      // Handle base64 images that don't have data: prefix
-      if (/^\/9j\//.test(imageUrl) || /^iVBORw0KGgo/.test(imageUrl) || /^R0lGOD/.test(imageUrl)) {
-        // Common base64 image headers - add data URI prefix
-        let mimeType = 'jpeg'; // Default
-        if (/^iVBORw0KGgo/.test(imageUrl)) mimeType = 'png';
-        if (/^R0lGOD/.test(imageUrl)) mimeType = 'gif';
-        
-        imageSrc = `data:image/${mimeType};base64,${imageUrl}`;
-        displayUrl = `Base64 ${mimeType.toUpperCase()} (${Math.round(imageUrl.length * 0.75 / 1024)}KB)`;
-      } else if (/^data:image/.test(imageUrl)) {
-        // Already has data: prefix, extract info for display
-        const match = imageUrl.match(/^data:image\/([^;]+);base64,(.+)$/);
-        if (match) {
-          const format = match[1].toUpperCase();
-          const base64Data = match[2];
-          displayUrl = `Base64 ${format} (${Math.round(base64Data.length * 0.75 / 1024)}KB)`;
-        }
-      }
-      
-      // Generate unique ID for this image
-      const imageId = `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      return `
-        <div class="image-value-container" style="display: inline-flex; align-items: center; gap: 8px; width: fit-content;">
-          <img 
-            id="${imageId}"
-            src="${imageSrc}" 
-            alt="Image" 
-            class="inline-image hover-expandable"
-            data-full-src="${imageSrc}"
-            data-display-url="${displayUrl}"
-            style="
-              max-width: 80px; 
-              max-height: 60px; 
-              border-radius: 4px; 
-              border: 1px solid #e5e7eb;
-              object-fit: cover;
-              cursor: pointer;
-              flex-shrink: 0;
-            "
-            onclick="this.parentElement.querySelector('.image-url-display').style.display = this.parentElement.querySelector('.image-url-display').style.display === 'none' ? 'block' : 'none'"
-            onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-          />
-          <div class="image-preview">
-            <img src="${imageSrc}" alt="Enlarged image" onerror="this.parentElement.style.display='none';" />
-            <div class="preview-info">${displayUrl.length > 60 ? displayUrl.substring(0, 60) + '...' : displayUrl}</div>
-          </div>
-          <div class="image-url-display" style="display: none; font-size: 11px; color: #6b7280; word-break: break-all;">
-            ${this.highlightSearchTerm(displayUrl)}
-          </div>
-          <div class="image-fallback" style="display: none; font-size: 11px; color: #ef4444;">
-            ${this.highlightSearchTerm(displayUrl)}
-          </div>
-        </div>
-      `;
-    }    attachOptimizedEventListeners() {
-      // Single delegated event listener for maximum performance
-      this.container.removeEventListener('click', this.handleTableClick);
-      this.handleTableClick = this.handleTableClick.bind(this);
-      this.container.addEventListener('click', this.handleTableClick);
-      
-      // Add mouse tracking for image preview positioning
-      this.container.removeEventListener('mousemove', this.handleMouseMove);
-      this.handleMouseMove = this.handleMouseMove.bind(this);
-      this.container.addEventListener('mousemove', this.handleMouseMove);
-      
-      // No scroll handler needed since we're not using virtual scrolling
-    }
-
-    handleTableClick(e) {
-      // Handle array expansion/collapse badges
-      const arrayBadge = e.target.closest('.expandable-array');
-      if (arrayBadge) {
-        const arrayKey = arrayBadge.dataset.arrayKey;
-        this.toggleArrayExpansion(arrayKey);
-        return;
-      }
-
-      // Handle object expansion/collapse badges
-      const objectBadge = e.target.closest('.expandable-object');
-      if (objectBadge) {
-        const objectKey = objectBadge.dataset.objectKey;
-        this.toggleObjectExpansion(objectKey);
-        return;
-      }
-      
-      // Handle object modal for non-arrays
-      const clickable = e.target.closest('.clickable');
-      if (clickable) {
-        const cell = clickable.closest('.json2table-cell');
-        const rowIndex = parseInt(cell.dataset.row);
-        const col = cell.dataset.col;
-        const value = this.filteredData[rowIndex][col];
-        
-        if (typeof value === 'object' && !Array.isArray(value)) {
-          this.showValueModal(value, `${col} (Row ${rowIndex + 1})`);
-        }
-      }
-    }
-
-    toggleArrayExpansion(arrayKey) {      
-      if (this.expandedArrays.has(arrayKey)) {
-        this.expandedArrays.delete(arrayKey);
-      } else {
-        this.expandedArrays.add(arrayKey);
-      }
-      
-      // Simple re-render without complex scroll handling
-      this.render();
-    }
-
-    toggleObjectExpansion(objectKey) {
-      if (this.expandedArrays.has(objectKey)) {
-        this.expandedArrays.delete(objectKey);
-      } else {
-        this.expandedArrays.add(objectKey);
-      }
-      
-      // Simple re-render without complex scroll handling
-      this.render();
-    }
-
-    throttledScrollHandler(e) {
-      // Use requestAnimationFrame for smoother scrolling
-      if (this.rafId) {
-        cancelAnimationFrame(this.rafId);
-      }
-      
-      this.rafId = requestAnimationFrame(() => {
-        // Make sure we're getting the scroll position from the right element
-        this.scrollTop = e.target.scrollTop;
-        this.render();
-        this.rafId = null;
-      });
-    }    formatColumnName(name) {
-      return name.split('.').pop().replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-    }
-
-    handleMouseMove(e) {
-      // Update CSS variables for image preview positioning
-      // Only update if we're hovering over an image
-      if (e.target.classList && e.target.classList.contains('hover-expandable')) {
-        const mouseX = e.clientX;
-        const mouseY = e.clientY;
-        const windowWidth = window.innerWidth;
-        const windowHeight = window.innerHeight;
-        
-        // Adjust position to keep preview on screen
-        let adjustedX = mouseX;
-        let adjustedY = mouseY;
-        
-        // If too close to right edge, show on left side of cursor
-        if (mouseX > windowWidth - 420) { // 400px preview width + 20px margin
-          adjustedX = mouseX;
-          document.documentElement.style.setProperty('--preview-transform', 'translate(-100%, -50%)');
-        } else {
-          document.documentElement.style.setProperty('--preview-transform', 'translate(15px, -50%)');
-        }
-        
-        // Keep some margin from edges
-        if (adjustedY < 50) adjustedY = 50;
-        if (adjustedY > windowHeight - 50) adjustedY = windowHeight - 50;
-        
-        document.documentElement.style.setProperty('--mouse-x', adjustedX + 'px');
-        document.documentElement.style.setProperty('--mouse-y', adjustedY + 'px');
-      }
-    }
-
-    showValueModal(value, title) {
-      // Remove existing modal
-      if (this.modalOverlay) {
-        this.modalOverlay.remove();
-      }
-
-      // Create optimized modal
-      this.modalOverlay = document.createElement('div');
-      this.modalOverlay.className = 'json2table-value-modal';
-      this.modalOverlay.innerHTML = `
-        <div class="modal-backdrop" onclick="this.parentElement.remove()">
-          <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="modal-header">
-              <h3>${title}</h3>
-              <button class="modal-close" onclick="this.closest('.json2table-value-modal').remove()">×</button>
-            </div>
-            <div class="modal-body">
-              ${this.renderValueContent(value)}
-            </div>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(this.modalOverlay);
-    }
-
-    renderValueContent(value) {
       if (Array.isArray(value)) {
-        if (value.length === 0) return '<div class="empty-state">Empty array</div>';
-        
-        // For large arrays, show pagination
-        if (value.length > 100) {
-          return this.renderPaginatedArray(value);
-        }
-        
-        return `
-          <div class="array-content">
-            <div class="content-header">Array (${value.length} items)</div>
-            <div class="array-items">
-              ${value.map((item, idx) => `
-                <div class="array-item">
-                  <span class="item-index">[${idx}]</span>
-                  <span class="item-value">${this.formatModalValue(item)}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        `;
+        return `<span class="nested-array">Array[${value.length}]</span>`;
       }
-
-      if (typeof value === 'object' && value !== null) {
-        const entries = Object.entries(value);
-        if (entries.length === 0) return '<div class="empty-state">Empty object</div>';
-        
-        return `
-          <div class="object-content">
-            <div class="content-header">Object (${entries.length} properties)</div>
-            <div class="object-properties">
-              ${entries.map(([key, val]) => `
-                <div class="object-property">
-                  <span class="property-key">${key}:</span>
-                  <span class="property-value">${this.formatModalValue(val)}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        `;
-      }
-
-      return `<div class="simple-value">${String(value)}</div>`;
-    }
-
-    renderPaginatedArray(array) {
-      const pageSize = 50;
-      const totalPages = Math.ceil(array.length / pageSize);
       
-      return `
-        <div class="paginated-array">
-          <div class="content-header">Large Array (${array.length} items) - Showing first ${Math.min(pageSize, array.length)}</div>
-          <div class="array-items">
-            ${array.slice(0, pageSize).map((item, idx) => `
-              <div class="array-item">
-                <span class="item-index">[${idx}]</span>
-                <span class="item-value">${this.formatModalValue(item)}</span>
-              </div>
-            `).join('')}
-          </div>
-          ${totalPages > 1 ? `<div class="pagination-info">Showing 1-${pageSize} of ${array.length} items</div>` : ''}
-        </div>
-      `;
+      if (typeof value === 'object') {
+        const keys = Object.keys(value);
+        return `<span class="nested-object">Object{${keys.length}}</span>`;
+      }
+      
+      // String - truncate if too long
+      const str = String(value);
+      const sanitized = ErrorHandler.sanitizeInput(str);
+      if (str.length > 200) {
+        return `<span class="long-string">${sanitized.substring(0, 200)}...</span>`;
+      }
+      
+      return `<span class="string-value">${sanitized}</span>`;
     }
 
-    formatModalValue(value) {
-      if (value === null) return '<span class="null-value">null</span>';
-      if (value === undefined) return '<span class="undefined-value">undefined</span>';
-      if (typeof value === 'string') return `<span class="string-value">"${value}"</span>`;
-      if (typeof value === 'number') return `<span class="number-value">${value}</span>`;
-      if (typeof value === 'boolean') return `<span class="boolean-value">${value}</span>`;
-      if (Array.isArray(value)) return `<span class="nested-array">[Array: ${value.length} items]</span>`;
-      if (typeof value === 'object') return `<span class="nested-object">{Object: ${Object.keys(value).length} props}</span>`;
-      return String(value);
-    }    search(query) {
+    handleScroll() {
+      if (!this.virtualScrolling) return;
+      
+      const now = performance.now();
+      if (now - this.lastRenderTime < this.renderThrottle) {
+        if (this.rafId) cancelAnimationFrame(this.rafId);
+        this.rafId = requestAnimationFrame(() => this.handleScroll());
+        return;
+      }
+      
+      this.lastRenderTime = now;
+      // Virtual scrolling logic would go here
+    }
+
+    search(query) {
       if (!query.trim()) {
         this.filteredData = this.originalData;
-        this.searchQuery = null; // Clear search highlighting
       } else {
-        this.performSearch(query);
-        this.searchQuery = query.toLowerCase(); // Store for highlighting
+        const searchTerm = query.toLowerCase();
+        this.filteredData = this.originalData.filter(row => {
+          return Object.values(row).some(value => {
+            if (value === null || value === undefined) return false;
+            return String(value).toLowerCase().includes(searchTerm);
+          });
+        });
       }
       
-      // Keep expansions when searching - don't clear them
+      this.renderCache.clear();
       this.render();
-    }
-
-    performSearch(query) {
-      const lowerQuery = query.toLowerCase();
-      const startTime = performance.now();
-      
-      this.filteredData = this.originalData.filter(row => {
-        // Quick string search first (fastest)
-        const rowString = JSON.stringify(row).toLowerCase();
-        if (rowString.includes(lowerQuery)) return true;
-        
-        // If not found in JSON string, skip expensive deep search
-        return false;
-      });
-
-      console.log(`Search completed in ${performance.now() - startTime}ms`);
-    }
-
-    searchWithWorker(query) {
-      // Fallback to synchronous search if worker setup fails
-      this.performSearch(query);
     }
 
     expandAll() {
-      // Find all arrays and objects in the current filtered data and expand them recursively
-      this.filteredData.forEach((row, rowIndex) => {
-        const stableRowId = row.__rowId; // Use stable ID instead of changing index
-        this.columns.forEach(col => {
-          const value = row[col];
-          this.expandAllNested(value, stableRowId, col, '');
-        });      });
-      
-      // Simple re-render
-      this.render();
+      // Find all expandable elements and trigger their expansion
+      const expandableElements = this.container.querySelectorAll('.expandable-array, .expandable-object');
+      expandableElements.forEach(element => {
+        // Only expand if not already expanded (check for inline expanded content)
+        const cell = element.closest('td');
+        const hasExpandedContent = cell.querySelector('.expanded-content-inline');
+        
+        if (!hasExpandedContent) {
+          this.handleExpansionClick(element);
+        }
+      });
     }
 
-    expandAllNested(value, rowIndex, col, nestedPath) {
-      if (Array.isArray(value) && value.length > 0) {
-        // Expand this array
-        const arrayKey = nestedPath ? `${rowIndex}-${col}-${nestedPath}-array` : `${rowIndex}-${col}`;
-        this.expandedArrays.add(arrayKey);
+    collapseAll() {
+      // Find and remove all inline expanded content
+      const expandedContent = this.container.querySelectorAll('.expanded-content-inline');
+      expandedContent.forEach(content => {
+        const cell = content.closest('td');
+        const triggerElement = cell.querySelector('.expandable-array, .expandable-object');
         
-        // Recursively expand nested objects/arrays within array items
-        value.forEach((item, itemIndex) => {
-          if (typeof item === 'object' && item !== null) {
-            Object.keys(item).forEach(itemKey => {
-              const nestedValue = item[itemKey];
-              const newPath = nestedPath ? `${nestedPath}-${itemIndex}-${itemKey}` : `${itemIndex}-${itemKey}`;
-              this.expandAllNested(nestedValue, rowIndex, col, newPath);
-            });
-          }
-        });
-      } else if (typeof value === 'object' && value !== null && Object.keys(value).length > 0) {
-        // Expand this object
-        const objectKey = nestedPath ? `${rowIndex}-${col}-${nestedPath}-object` : `${rowIndex}-${col}-object`;
-        this.expandedArrays.add(objectKey);
+        // Remove expanded content
+        content.remove();
         
-        // Recursively expand nested objects/arrays within this object
-        Object.keys(value).forEach(key => {
-          const nestedValue = value[key];
-          const newPath = nestedPath ? `${nestedPath}-${key}` : key;
-          this.expandAllNested(nestedValue, rowIndex, col, newPath);
-        });
-      }
-    }    collapseAll() {
-      const expandedCount = this.expandedArrays.size;
-      this.expandedArrays.clear();
-      
-      // Simple re-render
-      this.render();
-    }
-
-    showTemporaryMessage(message, type = 'info') {
-      // Create temporary notification
-      const notification = document.createElement('div');
-      notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 20px;
-        border-radius: 6px;
-        color: white;
-        font-weight: 500;
-        z-index: 1000001;
-        transition: all 0.3s ease;
-        background: ${type === 'success' ? '#10b981' : type === 'info' ? '#2563eb' : '#f59e0b'};
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      `;
-      notification.textContent = message;
-      document.body.appendChild(notification);
-      
-      // Auto remove after 2 seconds
-      setTimeout(() => {
-        notification.style.opacity = '0';
-        notification.style.transform = 'translateY(-20px)';
-        setTimeout(() => notification.remove(), 300);      }, 2000);
+        // Reset trigger element text and cell styling
+        if (triggerElement) {
+          triggerElement.textContent = triggerElement.dataset.type === 'array' 
+            ? `Array[${triggerElement.dataset.length}]`
+            : `Object{${triggerElement.dataset.keys}}`;
+        }
+        
+        cell.classList.remove('cell-expanded');
+      });
     }
 
     exportCSV() {
-      const headers = this.columns.join(',');
-      const rows = this.filteredData.map(row =>
-        this.columns.map(col => {
-          const value = row[col] || '';
-          let csvValue = '';
-          
-          if (Array.isArray(value)) {
-            csvValue = `"[${value.length} items]"`;
-          } else if (typeof value === 'object' && value !== null) {
-            csvValue = `"{${Object.keys(value).length} properties}"`;
-          } else {
-            csvValue = `"${String(value).replace(/"/g, '""')}"`;
-          }
-          
-          return csvValue;
-        }).join(',')
-      );
+      try {
+        const headers = this.columns;
+        const csvContent = [
+          headers.join(','),
+          ...this.filteredData.map(row => 
+            headers.map(header => {
+              const value = row[header];
+              if (value === null || value === undefined) return '';
+              if (typeof value === 'object') return JSON.stringify(value);
+              return `"${String(value).replace(/"/g, '""')}"`;
+            }).join(',')
+          )
+        ].join('\n');
 
-      const csv = [headers, ...rows].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'json-table-export.csv';
-      a.click();
-      
-      URL.revokeObjectURL(url);
-    }
-
-    getRowHeight(rowIndex) {
-      // Simple consistent height for all rows
-      return this.rowHeight;
-    }
-
-    preserveScrollPosition() {
-      // Store current scroll position before render
-      if (this.container) {
-        this.scrollTop = this.container.scrollTop;
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'json-table-export.csv';
+        link.click();
+        URL.revokeObjectURL(link.href);
+      } catch (error) {
+        ErrorHandler.globalHandler(error);
       }
     }
 
-    restoreScrollPosition() {
-      // Restore scroll position after render
-      if (this.container && this.scrollTop !== undefined) {
-        this.container.scrollTop = this.scrollTop;
+    attachOptimizedEventListeners() {
+      const tableContainer = this.container;
+      
+      tableContainer.addEventListener('click', this.boundClickHandler);
+      this.eventListeners.push({ element: tableContainer, event: 'click', handler: this.boundClickHandler });
+      
+      if (this.virtualScrolling) {
+        const scrollContainer = tableContainer.querySelector('.virtual-scroll-container');
+        if (scrollContainer) {
+          scrollContainer.addEventListener('scroll', this.boundScrollHandler);
+          this.eventListeners.push({ element: scrollContainer, event: 'scroll', handler: this.boundScrollHandler });
+        }
       }
     }
 
-  }
-
-  // Function to show table viewer in existing container or create new one
-  function showTableViewer(tableData) {
-    // Check if auto-converted container already exists
-    let container = document.getElementById('json2tableContainer');
-    
-    if (!container) {
-      // Create new container for manual conversion
-      container = document.createElement('div');
-      container.id = 'json2tableContainer';
-      container.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: var(--bg-color, #ffffff);
-        color: var(--text-color, #333333);
-        z-index: 10000;
-        overflow: hidden;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      `;
-      document.body.appendChild(container);
-      
-      // Apply theme for manual conversions
-      AutoJSONDetector.applyTheme();
-    }
-      // Clear existing content and create viewer
-    container.innerHTML = '';
-    
-    // Use the same interface creation method
-    AutoJSONDetector.createTableInterface(container, tableData);
-  }
-
-  // Auto-conversion initialization
-  // Run automatic detection when page loads
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(() => AutoJSONDetector.checkAndConvert(), 100);
-    });
-  } else {
-    // Document already loaded
-    setTimeout(() => AutoJSONDetector.checkAndConvert(), 100);
-  }
-  // Message listener for manual trigger and settings
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'detectJSON') {
-      // Use the same successful auto-convert logic
-      AutoJSONDetector.checkAndConvert().then(result => {
-        sendResponse({ hasData: result.converted, result: result });
-      }).catch(error => {
-        sendResponse({ hasData: false, error: error.message });
+    cleanup() {
+      this.eventListeners.forEach(({ element, event, handler }) => {
+        element.removeEventListener(event, handler);
       });
-      return true;
-    } else if (request.action === 'showTable') {
-      // Use the same successful auto-convert logic
-      AutoJSONDetector.checkAndConvert().then(result => {
+      this.eventListeners = [];
+      
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+      
+      this.renderCache.clear();
+    }
+  }
+
+  // Message listener for communication with popup
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'detectJson') {
+      AutoJSONDetector.checkAndConvert(true).then(result => {
         if (result.converted) {
-          sendResponse({ success: true });
+          sendResponse({
+            success: true,
+            recordCount: result.rawLength ? Math.round(result.rawLength/1024) + 'KB' : 'Unknown size',
+            converted: true
+          });
         } else {
-          sendResponse({ success: false, message: result.note || 'No suitable table data found' });
+          sendResponse({ success: false, note: result.note || 'No suitable JSON found' });
         }
       }).catch(error => {
-        sendResponse({ success: false, message: error.message });
+        ErrorHandler.globalHandler(error);
+        sendResponse({ success: false, error: error.message });
       });
-      return true;
-    } else if (request.action === 'autoConvert') {
-      AutoJSONDetector.checkAndConvert().then(result => {
-        sendResponse(result);
-      });
+
       return true; // Will respond asynchronously
     }
+    
+    if (request.action === 'settingsChanged') {
+      // Handle settings changes from popup
+      return false;
+    }
+  });
+
+  // Auto-detection on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      PerformanceUtils.requestIdleCallback(() => {
+        AutoJSONDetector.checkAndConvert(false);
+      });
+    });
+  } else {
+    PerformanceUtils.requestIdleCallback(() => {
+      AutoJSONDetector.checkAndConvert(false);
+    });
+  }
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    memoryManager.cleanup();
   });
 
 })();
