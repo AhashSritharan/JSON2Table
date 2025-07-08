@@ -35,13 +35,51 @@ class TableViewer {
       return [];
     }
     
-    const columnSet = new Set();
-    data.slice(0, 100).forEach(row => { // Sample first 100 rows for columns
+    // Track column statistics and preserve discovery order
+    const columnStats = new Map();
+    const columnOrder = []; // Track the order columns are first discovered
+    const sampleSize = Math.min(data.length, 100); // Sample first 100 rows for analysis
+    
+    // Analyze columns and count non-null values, preserving discovery order
+    data.slice(0, sampleSize).forEach(row => {
       if (row && typeof row === 'object') {
-        Object.keys(row).forEach(key => columnSet.add(key));
+        Object.keys(row).forEach(key => {
+          if (!columnStats.has(key)) {
+            columnStats.set(key, { nonNullCount: 0, totalCount: 0 });
+            columnOrder.push(key); // Remember the order we first saw this column
+          }
+          
+          const stats = columnStats.get(key);
+          stats.totalCount++;
+          
+          const value = row[key];
+          // Count as non-null if it's not null, undefined, or empty string
+          if (value !== null && value !== undefined && value !== '') {
+            stats.nonNullCount++;
+          }
+        });
       }
     });
-    return Array.from(columnSet);
+    
+    // Sort columns: data density first, then preserve original order
+    const sortedColumns = Array.from(columnStats.keys()).sort((a, b) => {
+      // 1. Sort by data density (non-null percentage)
+      const statsA = columnStats.get(a);
+      const statsB = columnStats.get(b);
+      const densityA = statsA.nonNullCount / statsA.totalCount;
+      const densityB = statsB.nonNullCount / statsB.totalCount;
+      
+      if (densityA !== densityB) {
+        return densityB - densityA; // Higher density first
+      }
+      
+      // 2. Preserve original discovery order (not alphabetical)
+      const orderA = columnOrder.indexOf(a);
+      const orderB = columnOrder.indexOf(b);
+      return orderA - orderB;
+    });
+    
+    return sortedColumns;
   }
 
   render() {

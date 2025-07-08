@@ -87,7 +87,24 @@ class JSONDetector {
       }
       
       // Otherwise, convert single object to property-value rows
-      return Object.entries(jsonData).map(([key, value]) => ({
+      const entries = Object.entries(jsonData);
+      
+      // Sort entries: data quality first, then preserve original order
+      const sortedEntries = entries.sort(([keyA, valueA], [keyB, valueB]) => {
+        // 1. Sort by data quality (non-null values first)
+        const aHasData = valueA !== null && valueA !== undefined && valueA !== '';
+        const bHasData = valueB !== null && valueB !== undefined && valueB !== '';
+        
+        if (aHasData && !bHasData) return -1;
+        if (!aHasData && bHasData) return 1;
+        
+        // 2. Preserve original order (use original entry index)
+        const originalOrderA = entries.findIndex(([key]) => key === keyA);
+        const originalOrderB = entries.findIndex(([key]) => key === keyB);
+        return originalOrderA - originalOrderB;
+      });
+      
+      return sortedEntries.map(([key, value]) => ({
         property: key,
         value: value
       }));
