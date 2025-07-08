@@ -14,7 +14,17 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": [
+        "src/utils/json-detector.js",
+        "src/utils/data-flattener.js",
+        "src/utils/theme-manager.js",
+        "src/utils/style-manager.js",
+        "src/utils/ui-utils.js",
+        "src/components/table-viewer.js",
+        "src/core/auto-json-detector.js",
+        "src/core/message-handler.js",
+        "src/content-main.js"
+      ],
       "run_at": "document_idle"
     }
   ],
