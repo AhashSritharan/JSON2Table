@@ -11,10 +11,11 @@
     "chrome-extension",
     "json",
     "table",
+    "grid",
     "data-visualization",
     "performance"
   ],
-  "author": "JSON2Table Team",
+  "author": "Ahash Sritharan",
   "license": "MIT",
   "devDependencies": {},
   "dependencies": {}

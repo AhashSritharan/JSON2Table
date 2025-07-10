@@ -908,6 +908,15 @@ class TableViewer {
     console.log(`Search completed in ${performance.now() - startTime}ms`);
   }
 
+  collapseAll() {
+    // Clear all expanded arrays and objects
+    const expandedCount = this.expandedArrays.size;
+    this.expandedArrays.clear();
+
+    // Simple re-render
+    this.render();
+  }
+
   expandAll() {
     // Find all arrays and objects in the current filtered data and expand them recursively
     this.filteredData.forEach((row, rowIndex) => {
@@ -920,6 +929,56 @@ class TableViewer {
 
     // Simple re-render
     this.render();
+  }
+
+  expandAllNested(value, rowId, col, prefix) {
+    // Base case: this isn't an array or object
+    if (typeof value !== 'object' || value === null) {
+      return;
+    }
+
+    // Expand arrays
+    if (Array.isArray(value)) {
+      // Match the exact format used in formatCellValueWithExpansion
+      const arrayKey = `${rowId}-${col}`;
+      this.expandedArrays.add(arrayKey);
+
+      // Recursively expand nested objects/arrays within this array
+      value.forEach((item, idx) => {
+        if (typeof item === 'object' && item !== null) {
+          if (Array.isArray(item)) {
+            // For nested arrays, we use the format: rowId-col-index-array
+            const nestedArrayKey = `${rowId}-${col}-${idx}-array`;
+            this.expandedArrays.add(nestedArrayKey);
+          } else {
+            // For nested objects, we use the format: rowId-col-index-object
+            const nestedObjectKey = `${rowId}-${col}-${idx}-object`;
+            this.expandedArrays.add(nestedObjectKey);
+          }
+        }
+      });
+    }
+    // Expand objects
+    else {
+      // Match the exact format used in formatCellValueWithExpansion
+      const objectKey = `${rowId}-${col}-object`;
+      this.expandedArrays.add(objectKey);
+
+      // Recursively expand nested objects/arrays within this object
+      Object.entries(value).forEach(([key, val]) => {
+        if (typeof val === 'object' && val !== null) {
+          if (Array.isArray(val)) {
+            // For nested arrays inside objects, use: rowId-col-key-array
+            const nestedArrayKey = `${rowId}-${col}-${key}-array`;
+            this.expandedArrays.add(nestedArrayKey);
+          } else {
+            // For nested objects inside objects, use: rowId-col-key-object
+            const nestedObjectKey = `${rowId}-${col}-${key}-object`;
+            this.expandedArrays.add(nestedObjectKey);
+          }
+        }
+      });
+    }
   }
 
   getLikelyCsvDelimiter() {
