@@ -5,10 +5,10 @@ class UIUtils {
   static clearPageAndResetStyles() {
     // Remove all existing content and styles
     document.body.innerHTML = '';
-    
+
     // Remove any remaining PRE elements that might still exist
     document.querySelectorAll('pre').forEach(pre => pre.remove());
-    
+
     document.head.querySelectorAll('style').forEach(style => {
       // Only remove non-essential styles, keep basic browser styles
       if (!style.id || !style.id.includes('json2table')) {
@@ -23,7 +23,7 @@ class UIUtils {
       height: 100%;
       overflow: hidden;
     `;
-    
+
     document.body.style.cssText = `
       margin: 0;
       padding: 0;
@@ -83,7 +83,7 @@ class UIUtils {
       `;
 
       let tableMode = true;
-      
+
       buttonRaw.addEventListener('click', () => {
         if (tableMode) {
           tableMode = false;
@@ -92,7 +92,7 @@ class UIUtils {
           // Enable scrolling for raw view
           document.body.style.overflow = 'auto';
           document.documentElement.style.overflow = 'auto';
-          
+
           buttonTable.style.background = 'var(--button-bg)';
           buttonTable.style.color = 'var(--text-color)';
           buttonRaw.style.background = 'var(--button-active)';
@@ -108,7 +108,7 @@ class UIUtils {
           // Disable scrolling for table view (table handles its own scrolling)
           document.body.style.overflow = 'hidden';
           document.documentElement.style.overflow = 'hidden';
-          
+
           buttonTable.style.background = 'var(--button-active)';
           buttonTable.style.color = 'white';
           buttonRaw.style.background = 'var(--button-bg)';
@@ -124,7 +124,7 @@ class UIUtils {
       buttonTable.title = 'Currently viewing JSON as interactive table';
       optionBar.appendChild(buttonTable);
     }
-    
+
     document.body.appendChild(optionBar);
   }
 
@@ -216,6 +216,8 @@ class UIUtils {
 
     // Initialize table viewer
     const tableViewer = new TableViewer(tableData);
+    // Store table viewer globally for access by message handler
+    window.tableViewer = tableViewer;
     tableViewer.render();
 
     // Check if auto-expand is enabled and expand all automatically
@@ -234,10 +236,10 @@ class UIUtils {
     const jsonForView = originalJson || tableData;
     document.getElementById('json2table-toggle-view').onclick = () => this.toggleView(jsonForView);      // Export dropdown functionality
     const exportButton = document.getElementById('json2table-export');
-    
+
     // Create dropdown menu and append to body to escape stacking context
     const exportMenu = document.createElement('div');
-    exportMenu.id = 'json2table-export-menu';    exportMenu.style.cssText = `
+    exportMenu.id = 'json2table-export-menu'; exportMenu.style.cssText = `
       position: fixed;
       background: var(--bg-color);
       border: 1px solid var(--border-color);
@@ -249,7 +251,7 @@ class UIUtils {
       min-width: 80px;
       pointer-events: auto;
       overflow: hidden;
-    `;      exportMenu.innerHTML = `
+    `; exportMenu.innerHTML = `
       <button id="json2table-export-csv" style="
         padding: 8px 16px;
         background: none;
@@ -282,54 +284,54 @@ class UIUtils {
         width: 100%;
       ">JSON</button>
     `;
-    
+
     document.body.appendChild(exportMenu);
-    
+
     const exportCsvBtn = document.getElementById('json2table-export-csv');
     const exportJsonBtn = document.getElementById('json2table-export-json');
-    
+
     // Toggle dropdown
     exportButton.onclick = (e) => {
       e.stopPropagation();
       const isVisible = exportMenu.style.display === 'block';
-      
+
       if (!isVisible) {
         // Show dropdown to measure its dimensions
         exportMenu.style.display = 'block';
         exportMenu.style.visibility = 'hidden';
-        
+
         // Get button and dropdown dimensions
         const buttonRect = exportButton.getBoundingClientRect();
         const menuRect = exportMenu.getBoundingClientRect();
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
-        
+
         // Calculate initial position
         let top = buttonRect.bottom + 2;
         let left = buttonRect.left;
-        
+
         // Check if dropdown extends beyond right edge of viewport
         if (left + menuRect.width > viewportWidth) {
           // Position to the left of the button instead
           left = buttonRect.right - menuRect.width;
         }
-        
+
         // Check if dropdown extends beyond bottom edge of viewport
         if (top + menuRect.height > viewportHeight) {
           // Position above the button instead
           top = buttonRect.top - menuRect.height - 2;
         }
-        
+
         // Ensure dropdown doesn't go beyond left edge
         if (left < 0) {
           left = 8; // Small margin from left edge
         }
-        
+
         // Ensure dropdown doesn't go beyond top edge
         if (top < 0) {
           top = 8; // Small margin from top edge
         }
-        
+
         // Apply final position and make visible
         exportMenu.style.top = top + 'px';
         exportMenu.style.left = left + 'px';
@@ -338,26 +340,26 @@ class UIUtils {
         exportMenu.style.display = 'none';
       }
     };
-    
+
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
       if (!exportButton.contains(e.target) && !exportMenu.contains(e.target)) {
         exportMenu.style.display = 'none';
       }
     });
-    
+
     // Export CSV option
     exportCsvBtn.onclick = () => {
       tableViewer.exportCSV();
       exportMenu.style.display = 'none';
     };
-    
+
     // Export JSON option
     exportJsonBtn.onclick = () => {
       this.exportJSON(jsonForView);
       exportMenu.style.display = 'none';
     };
-    
+
     // Add hover effects to menu items
     [exportCsvBtn, exportJsonBtn].forEach(btn => {
       btn.onmouseenter = () => btn.style.background = 'var(--button-bg)';
@@ -383,16 +385,16 @@ class UIUtils {
       tableContainer.style.display = 'none';
       jsonContainer.style.display = 'block';
       toggleButton.textContent = 'Table View';
-      
+
       // Disable table-specific controls
       if (searchInput) searchInput.disabled = true;
       if (expandButton) expandButton.disabled = true;
       if (collapseButton) collapseButton.disabled = true;
-      
+
       // Handle both original JSON string and parsed JSON data
       let formattedJson;
       let dataLength = 0;
-      
+
       if (typeof jsonData === 'string') {
         // Original JSON string - use as is but format it
         try {
@@ -409,7 +411,7 @@ class UIUtils {
         formattedJson = JSON.stringify(jsonData, null, 2);
         dataLength = Array.isArray(jsonData) ? jsonData.length : Object.keys(jsonData).length;
       }
-      
+
       // Render formatted JSON with syntax highlighting
       jsonContainer.innerHTML = `
         <div style="
@@ -442,7 +444,7 @@ class UIUtils {
           ">${ThemeManager.syntaxHighlightJson(formattedJson)}</pre>
         </div>
       `;
-      
+
       // Store JSON data for copying
       window.currentJsonData = formattedJson;
     } else {
@@ -450,7 +452,7 @@ class UIUtils {
       tableContainer.style.display = 'block';
       jsonContainer.style.display = 'none';
       toggleButton.textContent = 'JSON View';
-      
+
       // Re-enable table-specific controls
       if (searchInput) searchInput.disabled = false;
       if (expandButton) expandButton.disabled = false;
@@ -480,18 +482,19 @@ class UIUtils {
     `;
     notification.textContent = message;
     document.body.appendChild(notification);
-    
+
     // Auto remove after 2 seconds
     setTimeout(() => {
       notification.style.opacity = '0';
       notification.style.transform = 'translateY(-20px)';
-      setTimeout(() => notification.remove(), 300);    }, 2000);
+      setTimeout(() => notification.remove(), 300);
+    }, 2000);
   }
   static exportJSON(jsonData) {
     try {
       // Handle both original JSON string and parsed JSON data
       let formattedJson;
-      
+
       if (typeof jsonData === 'string') {
         // Original JSON string - use as is but format it
         try {
@@ -505,17 +508,17 @@ class UIUtils {
         // Parsed JSON data - stringify it
         formattedJson = JSON.stringify(jsonData, null, 2);
       }
-      
+
       // Create and download the JSON file
       const blob = new Blob([formattedJson], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-      
+
       const a = document.createElement('a');
       a.href = url;
       a.download = 'json-table-export.json';
       a.click();
-        URL.revokeObjectURL(url);
-      
+      URL.revokeObjectURL(url);
+
     } catch (error) {
       console.error('Error exporting JSON:', error);
       this.showTemporaryMessage('Error downloading JSON', 'error');

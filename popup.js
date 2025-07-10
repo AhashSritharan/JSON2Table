@@ -1,9 +1,11 @@
 // Popup functionality for JSON2Table extension
-document.addEventListener('DOMContentLoaded', function() {  const detectBtn = document.getElementById('detectJson');
+document.addEventListener('DOMContentLoaded', function () {
+  const detectBtn = document.getElementById('detectJson');
   const statusDiv = document.getElementById('status');
   const autoConvertToggle = document.getElementById('autoConvertToggle');
   const autoExpandToggle = document.getElementById('autoExpandToggle');
   const themeSelect = document.getElementById('themeSelect');
+  const csvDelimiterSelect = document.getElementById('csvDelimiterSelect');
 
   // Load saved settings
   loadSettings();
@@ -13,48 +15,97 @@ document.addEventListener('DOMContentLoaded', function() {  const detectBtn = do
     statusDiv.textContent = message;
     statusDiv.className = `status ${type}`;
     statusDiv.style.display = 'block';
-    
+
     setTimeout(() => {
       statusDiv.style.display = 'none';
     }, 3000);
   }
   // Load settings from storage
   function loadSettings() {
-    chrome.storage.local.get(['autoConvert', 'autoExpand', 'themeOverride'], (result) => {
+    chrome.storage.local.get(['autoConvert', 'autoExpand', 'themeOverride', 'csvDelimiter'], (result) => {
       // Auto-convert toggle (default to true)
       const autoConvert = result.autoConvert !== false;
       autoConvertToggle.classList.toggle('active', autoConvert);
-      
+
       // Auto-expand toggle (default to true)
       const autoExpand = result.autoExpand !== false;
       autoExpandToggle.classList.toggle('active', autoExpand);
-      
+
       // Theme selection (default to system)
       const theme = result.themeOverride || 'system';
       themeSelect.value = theme;
+
+      // CSV delimiter selection (detect default if not set)
+      if (result.csvDelimiter) {
+        csvDelimiterSelect.value = result.csvDelimiter;
+      } else {
+        // Auto-detect the appropriate delimiter and set it as the default
+        const defaultDelimiter = getLikelyCsvDelimiter();
+        csvDelimiterSelect.value = defaultDelimiter;
+        // Save this default to storage
+        chrome.storage.local.set({ csvDelimiter: defaultDelimiter });
+      }
     });
   }
+
+  // Function to determine the likely CSV delimiter based on locale
+  function getLikelyCsvDelimiter() {
+    const locale = navigator.language || navigator.userLanguage;
+    // List of locales where semicolon is commonly used
+    const semicolonLocales = [
+      'de', // German
+      'fr', // French
+      'it', // Italian
+      'es', // Spanish
+      'ru', // Russian
+      'pl', // Polish
+      'nl', // Dutch
+      'da', // Danish
+      'fi', // Finnish
+      'sv', // Swedish
+      'cs', // Czech
+      'hu', // Hungarian
+      'tr', // Turkish
+      'pt-PT', // Portuguese (Portugal)
+      'sl', // Slovenian
+      'sk', // Slovak
+      'hr', // Croatian
+      'lt', // Lithuanian
+      'lv', // Latvian
+      'et', // Estonian
+      // Add more as needed
+    ];
+    // Check if the user's locale starts with any of the semicolon locales
+    if (semicolonLocales.some(code => locale.startsWith(code))) {
+      return ';';
+    }
+    return ',';
+  }
+
   // Save settings to storage
   function saveSettings() {
     const autoConvert = autoConvertToggle.classList.contains('active');
     const autoExpand = autoExpandToggle.classList.contains('active');
     const theme = themeSelect.value;
-    
+    const csvDelimiter = csvDelimiterSelect.value;
+
     chrome.storage.local.set({
       autoConvert: autoConvert,
       autoExpand: autoExpand,
-      themeOverride: theme
+      themeOverride: theme,
+      csvDelimiter: csvDelimiter
     }, () => {
       showStatus('Settings saved', 'success');
-      
+
       // Notify content script of setting changes
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]) {
-          chrome.tabs.sendMessage(tabs[0].id, { 
+          chrome.tabs.sendMessage(tabs[0].id, {
             action: 'settingsChanged',
             autoConvert: autoConvert,
             autoExpand: autoExpand,
-            themeOverride: theme
+            themeOverride: theme,
+            csvDelimiter: csvDelimiter
           }).catch(() => {
             // Ignore errors if content script not loaded
           });
@@ -63,30 +114,35 @@ document.addEventListener('DOMContentLoaded', function() {  const detectBtn = do
     });
   }
   // Auto-convert toggle handler
-  autoConvertToggle.addEventListener('click', function() {
+  autoConvertToggle.addEventListener('click', function () {
     this.classList.toggle('active');
     saveSettings();
   });
 
   // Auto-expand toggle handler
-  autoExpandToggle.addEventListener('click', function() {
+  autoExpandToggle.addEventListener('click', function () {
     this.classList.toggle('active');
     saveSettings();
   });
 
   // Theme selection handler
-  themeSelect.addEventListener('change', function() {
+  themeSelect.addEventListener('change', function () {
+    saveSettings();
+  });
+
+  // CSV delimiter selection handler
+  csvDelimiterSelect.addEventListener('change', function () {
     saveSettings();
   });// Detect and convert JSON on current page
-  detectBtn.addEventListener('click', async function() {
+  detectBtn.addEventListener('click', async function () {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
+
       // Use the working auto-convert logic for manual detection
-      const result = await chrome.tabs.sendMessage(tab.id, { 
-        action: 'detectJson' 
+      const result = await chrome.tabs.sendMessage(tab.id, {
+        action: 'detectJson'
       });
-      
+
       if (result.success) {
         showStatus(`JSON converted to table (${result.recordCount})`, 'success');
         window.close();

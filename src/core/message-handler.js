@@ -11,7 +11,7 @@ class MessageHandler {
           if (result.converted) {
             sendResponse({
               success: true,
-              recordCount: result.rawLength ? Math.round(result.rawLength/1024) + 'KB' : 'Unknown size',
+              recordCount: result.rawLength ? Math.round(result.rawLength / 1024) + 'KB' : 'Unknown size',
               converted: true
             });
           } else {
@@ -21,13 +21,19 @@ class MessageHandler {
           console.error('JSON detection error:', error);
           sendResponse({ success: false, error: error.message });
         });
-        
+
         return true; // Will respond asynchronously
       }
-      
+
       if (request.action === 'settingsChanged') {
         // Handle settings changes from popup
         // Settings are automatically saved to chrome.storage by popup.js
+
+        // If there's an active table viewer, update its CSV delimiter if needed
+        if (request.csvDelimiter !== undefined && window.tableViewer) {
+          window.tableViewer.csvDelimiter = request.csvDelimiter;
+        }
+
         // No response needed
         return false;
       }

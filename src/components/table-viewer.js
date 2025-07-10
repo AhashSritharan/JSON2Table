@@ -10,7 +10,18 @@ class TableViewer {
     this.visibleRows = Math.ceil(window.innerHeight / this.rowHeight) + 5;
     this.scrollTop = 0;
     this.columns = this.extractColumns(data);
-    
+    this.csvDelimiter = ','; // Default delimiter
+
+    // Get CSV delimiter from settings
+    chrome.storage.local.get(['csvDelimiter'], (result) => {
+      if (result.csvDelimiter) {
+        this.csvDelimiter = result.csvDelimiter;
+      } else {
+        // If not set, use the auto-detected delimiter based on locale
+        this.csvDelimiter = this.getLikelyCsvDelimiter();
+      }
+    });
+
     // Add stable row IDs that don't change when filtering
     this.originalData = data.map((row, index) => ({
       ...row,
@@ -34,12 +45,12 @@ class TableViewer {
     if (!Array.isArray(data) || data.length === 0) {
       return [];
     }
-    
+
     // Track column statistics and preserve discovery order
     const columnStats = new Map();
     const columnOrder = []; // Track the order columns are first discovered
     const sampleSize = Math.min(data.length, 100); // Sample first 100 rows for analysis
-    
+
     // Analyze columns and count non-null values, preserving discovery order
     data.slice(0, sampleSize).forEach(row => {
       if (row && typeof row === 'object') {
@@ -48,10 +59,10 @@ class TableViewer {
             columnStats.set(key, { nonNullCount: 0, totalCount: 0 });
             columnOrder.push(key); // Remember the order we first saw this column
           }
-          
+
           const stats = columnStats.get(key);
           stats.totalCount++;
-          
+
           const value = row[key];
           // Count as non-null if it's not null, undefined, or empty string
           if (value !== null && value !== undefined && value !== '') {
@@ -60,7 +71,7 @@ class TableViewer {
         });
       }
     });
-    
+
     // Sort columns: data density first, then preserve original order
     const sortedColumns = Array.from(columnStats.keys()).sort((a, b) => {
       // 1. Sort by data density (non-null percentage)
@@ -68,17 +79,17 @@ class TableViewer {
       const statsB = columnStats.get(b);
       const densityA = statsA.nonNullCount / statsA.totalCount;
       const densityB = statsB.nonNullCount / statsB.totalCount;
-      
+
       if (densityA !== densityB) {
         return densityB - densityA; // Higher density first
       }
-      
+
       // 2. Preserve original discovery order (not alphabetical)
       const orderA = columnOrder.indexOf(a);
       const orderB = columnOrder.indexOf(b);
       return orderA - orderB;
     });
-    
+
     return sortedColumns;
   }
 
@@ -116,15 +127,15 @@ class TableViewer {
     return `
       <tr data-row-index="${rowIndex}" class="main-row">
         ${this.columns.map(col => {
-          const value = row[col];
-          const cellContent = this.formatCellValueWithExpansion(value, stableRowId, col);
-          // Determine if this cell needs wide content class
-          const isWideContent = this.shouldUseWideContent(value, cellContent);
-          const widthClass = isWideContent ? ' wide-content' : '';
-          return `<td class="json2table-cell${widthClass}" data-col="${col}" data-row="${rowIndex}">
+      const value = row[col];
+      const cellContent = this.formatCellValueWithExpansion(value, stableRowId, col);
+      // Determine if this cell needs wide content class
+      const isWideContent = this.shouldUseWideContent(value, cellContent);
+      const widthClass = isWideContent ? ' wide-content' : '';
+      return `<td class="json2table-cell${widthClass}" data-col="${col}" data-row="${rowIndex}">
             ${cellContent}
           </td>`;
-        }).join('')}
+    }).join('')}
       </tr>
     `;
   }
@@ -140,7 +151,7 @@ class TableViewer {
     if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
       return false; // No wide content for any expandable content
     }
-    
+
     // String content - check length
     if (typeof value === 'string') {
       // Check if this string is an image URL - images don't need wide columns
@@ -152,7 +163,7 @@ class TableViewer {
       // Long strings definitely need wide columns
       return true;
     }
-    
+
     // For rendered HTML content, check if it contains expansion elements
     if (typeof cellContent === 'string') {
       if (cellContent.includes('expandable-array') || cellContent.includes('expandable-object')) return true;
@@ -161,18 +172,18 @@ class TableViewer {
       // Long rendered content
       if (cellContent.length > 50) return true;
     }
-    
+
     return false;
   }
 
   getArrayColumns(arrayItems) {
     const columnSet = new Set();
     const columnPriority = new Map();
-    
+
     // Sample more items for better column detection
     const sampleSize = Math.min(50, arrayItems.length);
     const sampleItems = arrayItems.slice(0, sampleSize);
-    
+
     sampleItems.forEach((item, index) => {
       if (typeof item === 'object' && item !== null) {
         Object.keys(item).forEach(key => {
@@ -184,51 +195,51 @@ class TableViewer {
         columnSet.add('value'); // For primitive arrays
       }
     });
-    
+
     // Convert to array and sort by priority (frequency) and common field names
     const columns = Array.from(columnSet).sort((a, b) => {
       // Prioritize common important fields first
       const priorityFields = ['id', 'name', 'title', 'rating', 'comment', 'date', 'price', 'description'];
       const aPriority = priorityFields.indexOf(a.toLowerCase());
       const bPriority = priorityFields.indexOf(b.toLowerCase());
-      
+
       if (aPriority !== -1 && bPriority !== -1) {
         return aPriority - bPriority;
       }
       if (aPriority !== -1) return -1;
       if (bPriority !== -1) return 1;
-      
+
       // Then sort by frequency
       const aFreq = columnPriority.get(a) || 0;
       const bFreq = columnPriority.get(b) || 0;
-      
+
       return bFreq - aFreq;
     });
-    
+
     // Limit to 10 columns for better display
     return columns.slice(0, 10);
   }
 
   formatArrayCellValue(value) {
     if (value === null || value === undefined) return '<span class="null-value">-</span>';
-    
+
     const stringValue = String(value);
-    
+
     // Format dates
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
       try {
         const date = new Date(value);
-        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       } catch (e) {
         // Fall through to regular formatting
       }
     }
-    
+
     // Format booleans
     if (typeof value === 'boolean') {
       return `<span class="boolean-value ${value ? 'true' : 'false'}">${value ? '✓' : '✗'}</span>`;
     }
-    
+
     // Format numbers
     if (typeof value === 'number') {
       return value % 1 === 0 ? value.toString() : value.toFixed(2);
@@ -246,34 +257,34 @@ class TableViewer {
 
   formatObjectPropertyValue(value) {
     if (value === null || value === undefined) return '<span class="null-value">-</span>';
-    
+
     const stringValue = String(value);
-    
+
     // Format dates
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
       try {
         const date = new Date(value);
-        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       } catch (e) {
         // Fall through to regular formatting
       }
     }
-    
+
     // Format booleans
     if (typeof value === 'boolean') {
       return `<span class="boolean-value ${value ? 'true' : 'false'}">${value ? '✓' : '✗'}</span>`;
     }
-    
+
     // Format numbers
     if (typeof value === 'number') {
       return value % 1 === 0 ? value.toString() : value.toFixed(2);
     }
-    
+
     // Handle arrays and objects
     if (Array.isArray(value)) {
       return `<span class="nested-array">[${value.length} items]</span>`;
     }
-    
+
     if (typeof value === 'object' && value !== null) {
       return `<span class="nested-object">{${Object.keys(value).length} props}</span>`;
     }
@@ -291,13 +302,13 @@ class TableViewer {
 
   formatCellValueWithExpansion(value, rowIndex, col) {
     if (value === null || value === undefined) return '';
-    
+
     if (Array.isArray(value)) {
       const count = value.length;
       const arrayKey = `${rowIndex}-${col}`;
       const isExpanded = this.expandedArrays.has(arrayKey);
       const expandIcon = isExpanded ? '[-]' : '[+]';
-      
+
       let html = `<span class="array-badge expandable-array" data-array-key="${arrayKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} array">
         ${expandIcon} [${count}] ${count === 1 ? 'item' : 'items'}
       </span>`;
@@ -317,38 +328,38 @@ class TableViewer {
                 </thead>
                 <tbody>
                   ${value.map((item, itemIndex) => {
-                    if (typeof item === 'object' && item !== null) {
-                      return `<tr class="inline-table-row">
+          if (typeof item === 'object' && item !== null) {
+            return `<tr class="inline-table-row">
                         ${arrayColumns.map(acol => {
-                          const cellValue = item[acol];
-                          return `<td class="inline-table-cell">${cellValue !== undefined ? this.highlightSearchTerm(this.formatArrayCellValue(cellValue)) : '<span class="null-value">-</span>'}</td>`;
-                        }).join('')}
+              const cellValue = item[acol];
+              return `<td class="inline-table-cell">${cellValue !== undefined ? this.highlightSearchTerm(this.formatArrayCellValue(cellValue)) : '<span class="null-value">-</span>'}</td>`;
+            }).join('')}
                       </tr>`;
-                    } else {
-                      return `<tr class="inline-table-row">
+          } else {
+            return `<tr class="inline-table-row">
                         <td class="inline-table-cell" colspan="${arrayColumns.length}">
                           <span class="inline-value">${this.highlightSearchTerm(this.formatInlineValue(item))}</span>
                         </td>
                       </tr>`;
-                    }
-                  }).join('')}
+          }
+        }).join('')}
                 </tbody>
               </table>
             </div>
           </div>`;
       }
-      
+
       return html;
     }
-    
+
     if (typeof value === 'object') {
       const propCount = Object.keys(value).length;
       if (propCount === 0) return '<span class="empty-object">{}</span>';
-      
+
       const objectKey = `${rowIndex}-${col}-object`;
       const isExpanded = this.expandedArrays.has(objectKey); // Reuse same tracking set
       const expandIcon = isExpanded ? '[-]' : '[+]';
-      
+
       let html = `<span class="object-badge expandable-object" data-object-key="${objectKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} object properties">
         ${expandIcon} {${propCount}} ${propCount === 1 ? 'property' : 'properties'}
       </span>`;
@@ -368,49 +379,49 @@ class TableViewer {
                 </thead>
                 <tbody>
                   ${Object.entries(value).map(([key, val]) => {
-                    // Determine if this property value needs wide content class (inline context)
-                    const isWideContent = this.shouldUseWideContent(val, null, 'inline-table');
-                    const widthClass = isWideContent ? ' wide-content' : '';
-                    
-                    return `<tr class="inline-table-row">
+          // Determine if this property value needs wide content class (inline context)
+          const isWideContent = this.shouldUseWideContent(val, null, 'inline-table');
+          const widthClass = isWideContent ? ' wide-content' : '';
+
+          return `<tr class="inline-table-row">
                       <td class="inline-table-cell inline-property-name">${this.highlightSearchTerm(key)}</td>
                       <td class="inline-table-cell inline-property-value${widthClass}">${this.highlightSearchTerm(this.formatInlineValue(val, rowIndex, col, key))}</td>
                     </tr>`;
-                  }).join('')}
+        }).join('')}
                 </tbody>
               </table>
             </div>
           </div>`;
       }
-      
+
       return html;
     }
 
     const stringValue = String(value);
-    
+
     // Check if the string value is an image URL
     if (this.isImageUrl(stringValue)) {
       return this.renderImageValue(stringValue);
     }
-    
+
     // Apply search highlighting to the value
     return this.highlightSearchTerm(stringValue);
   }
 
   formatInlineValue(value, parentRowIndex = null, parentCol = null, nestedKey = null) {
     if (value === null || value === undefined) return '<span class="null-value">null</span>';
-    
+
     if (Array.isArray(value)) {
       // For nested arrays, make them expandable too
       if (parentRowIndex !== null && parentCol !== null && nestedKey !== null) {
         const nestedArrayKey = `${parentRowIndex}-${parentCol}-${nestedKey}-array`;
         const isExpanded = this.expandedArrays.has(nestedArrayKey);
         const expandIcon = isExpanded ? '[-]' : '[+]';
-        
+
         let html = `<span class="array-badge expandable-array" data-array-key="${nestedArrayKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} nested array">
           ${expandIcon} [${value.length} items]
         </span>`;
-        
+
         if (isExpanded && value.length > 0) {
           const arrayColumns = this.getArrayColumns(value);
           html += `
@@ -425,46 +436,46 @@ class TableViewer {
                   </thead>
                   <tbody>
                     ${value.map((item, itemIndex) => {
-                      if (typeof item === 'object' && item !== null) {
-                        return `<tr class="inline-table-row">
+            if (typeof item === 'object' && item !== null) {
+              return `<tr class="inline-table-row">
                           ${arrayColumns.map(acol => {
-                            const cellValue = item[acol];
-                            return `<td class="inline-table-cell">${cellValue !== undefined ? this.formatArrayCellValue(cellValue) : '<span class="null-value">-</span>'}</td>`;
-                          }).join('')}
+                const cellValue = item[acol];
+                return `<td class="inline-table-cell">${cellValue !== undefined ? this.formatArrayCellValue(cellValue) : '<span class="null-value">-</span>'}</td>`;
+              }).join('')}
                         </tr>`;
-                      } else {
-                        return `<tr class="inline-table-row">
+            } else {
+              return `<tr class="inline-table-row">
                           <td class="inline-table-cell" colspan="${arrayColumns.length}">
                             <span class="inline-value">${this.formatInlineValue(item)}</span>
                           </td>
                         </tr>`;
-                      }
-                    }).join('')}
+            }
+          }).join('')}
                   </tbody>
                 </table>
               </div>
             </div>`;
         }
-        
+
         return html;
       }
-      
+
       return `<span class="nested-array">[${value.length} items]</span>`;
     }
-    
+
     if (typeof value === 'object') {
       const keys = Object.keys(value);
-      
+
       // For nested objects, make them expandable
       if (parentRowIndex !== null && parentCol !== null && nestedKey !== null) {
         const nestedObjectKey = `${parentRowIndex}-${parentCol}-${nestedKey}-object`;
         const isExpanded = this.expandedArrays.has(nestedObjectKey);
         const expandIcon = isExpanded ? '[-]' : '[+]';
-        
+
         let html = `<span class="object-badge expandable-object" data-object-key="${nestedObjectKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} nested object">
           ${expandIcon} {${keys.length} props}
         </span>`;
-        
+
         if (isExpanded) {
           html += `
             <div class="inline-object-expansion" data-object-key="${nestedObjectKey}" style="margin-top: 4px;">
@@ -479,30 +490,30 @@ class TableViewer {
                   </thead>
                   <tbody>
                     ${Object.entries(value).map(([key, val]) => {
-                      // Apply smart width logic to nested object property values (inline context)
-                      const isWideContent = this.shouldUseWideContent(val, null, 'inline-table');
-                      const widthClass = isWideContent ? ' wide-content' : '';
-                      
-                      return `<tr class="inline-table-row">
+            // Apply smart width logic to nested object property values (inline context)
+            const isWideContent = this.shouldUseWideContent(val, null, 'inline-table');
+            const widthClass = isWideContent ? ' wide-content' : '';
+
+            return `<tr class="inline-table-row">
                         <td class="inline-table-cell inline-property-name" style="font-size: 10px;">${key}</td>
                         <td class="inline-table-cell inline-property-value${widthClass}" style="font-size: 10px;">${this.formatInlineValue(val, parentRowIndex, parentCol, `${nestedKey}-${key}`)}</td>
                       </tr>`;
-                    }).join('')}
+          }).join('')}
                   </tbody>
                 </table>
               </div>
             </div>`;
         }
-        
+
         return html;
       }
-      
+
       // For simple objects with few properties, show them inline
       if (keys.length <= 4) {
         const props = keys.map(key => {
           const propValue = value[key];
           let displayValue;
-          
+
           // Handle nested values more gracefully
           if (typeof propValue === 'object' && propValue !== null) {
             if (Array.isArray(propValue)) {
@@ -515,21 +526,21 @@ class TableViewer {
           } else {
             displayValue = String(propValue);
           }
-          
+
           return `<strong>${key}:</strong> ${displayValue}`;
         }).join(', ');
-        
+
         return `<span class="nested-object-detailed">{${props}}</span>`;
       } else {
         // For complex objects, show summary
         return `<span class="nested-object">{${keys.length} props}</span>`;
       }
     }
-    
+
     if (typeof value === 'boolean') {
       return `<span class="boolean-value ${value}">${value ? '✓' : '✗'}</span>`;
     }
-    
+
     // Format dates
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
       try {
@@ -539,7 +550,7 @@ class TableViewer {
         // Fall through to regular formatting
       }
     }
-    
+
     // Truncate very long strings (but check for images first)
     if (typeof value === 'string') {
       // Check if it's an image URL first
@@ -562,10 +573,10 @@ class TableViewer {
     if (!this.searchQuery || typeof text !== 'string') {
       return text;
     }
-    
+
     // Create a case-insensitive regex to find all matches
     const regex = new RegExp(`(${this.escapeRegex(this.searchQuery)})`, 'gi');
-    
+
     // Replace matches with highlighted spans
     return text.replace(regex, '<mark class="search-highlight">$1</mark>');
   }
@@ -578,24 +589,24 @@ class TableViewer {
   isImageUrl(url) {
     // Check if the URL string looks like an image
     if (typeof url !== 'string') return false;
-    
+
     // Check for base64 encoded images
     if (/^data:image\/(jpeg|jpg|png|gif|webp|svg\+xml|bmp);base64,/i.test(url)) {
       return true;
     }
-    
+
     // Check for base64 strings that might be images (common JPEG header)
     if (/^\/9j\//.test(url) || /^iVBORw0KGgo/.test(url) || /^R0lGOD/.test(url)) {
       return true;
     }
-    
+
     // Must be a valid URL pattern for regular URLs
     if (!/^https?:\/\/.+/i.test(url)) return false;
-    
+
     // Check for image file extensions
     const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i;
     if (imageExtensions.test(url)) return true;
-    
+
     // Check for common image hosting patterns
     const imageHostPatterns = [
       /cdn\..*\.(jpg|jpeg|png|gif|webp|svg)/i,
@@ -606,7 +617,7 @@ class TableViewer {
       /thumbnail/i,
       /avatar/i
     ];
-    
+
     return imageHostPatterns.some(pattern => pattern.test(url));
   }
 
@@ -614,14 +625,14 @@ class TableViewer {
     // Determine if it's a base64 image and format the src accordingly
     let imageSrc = imageUrl;
     let displayUrl = imageUrl;
-    
+
     // Handle base64 images that don't have data: prefix
     if (/^\/9j\//.test(imageUrl) || /^iVBORw0KGgo/.test(imageUrl) || /^R0lGOD/.test(imageUrl)) {
       // Common base64 image headers - add data URI prefix
       let mimeType = 'jpeg'; // Default
       if (/^iVBORw0KGgo/.test(imageUrl)) mimeType = 'png';
       if (/^R0lGOD/.test(imageUrl)) mimeType = 'gif';
-      
+
       imageSrc = `data:image/${mimeType};base64,${imageUrl}`;
       displayUrl = `Base64 ${mimeType.toUpperCase()} (${Math.round(imageUrl.length * 0.75 / 1024)}KB)`;
     } else if (/^data:image/.test(imageUrl)) {
@@ -633,10 +644,10 @@ class TableViewer {
         displayUrl = `Base64 ${format} (${Math.round(base64Data.length * 0.75 / 1024)}KB)`;
       }
     }
-    
+
     // Generate unique ID for this image
     const imageId = `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
     return `
       <div class="image-value-container" style="display: inline-flex; align-items: center; gap: 8px; width: fit-content;">        <img 
           id="${imageId}"
@@ -675,7 +686,7 @@ class TableViewer {
     this.container.removeEventListener('click', this.handleTableClick);
     this.handleTableClick = this.handleTableClick.bind(this);
     this.container.addEventListener('click', this.handleTableClick);
-    
+
     // Add mouse tracking for image preview positioning
     this.container.removeEventListener('mousemove', this.handleMouseMove);
     this.handleMouseMove = this.handleMouseMove.bind(this);
@@ -698,7 +709,7 @@ class TableViewer {
       this.toggleObjectExpansion(objectKey);
       return;
     }
-    
+
     // Handle object modal for non-arrays
     const clickable = e.target.closest('.clickable');
     if (clickable) {
@@ -706,7 +717,7 @@ class TableViewer {
       const rowIndex = parseInt(cell.dataset.row);
       const col = cell.dataset.col;
       const value = this.filteredData[rowIndex][col];
-      
+
       if (typeof value === 'object' && !Array.isArray(value)) {
         this.showValueModal(value, `${col} (Row ${rowIndex + 1})`);
       }
@@ -719,7 +730,7 @@ class TableViewer {
     } else {
       this.expandedArrays.add(arrayKey);
     }
-    
+
     // Simple re-render without complex scroll handling
     this.render();
   }
@@ -730,7 +741,7 @@ class TableViewer {
     } else {
       this.expandedArrays.add(objectKey);
     }
-    
+
     // Simple re-render without complex scroll handling
     this.render();
   }
@@ -743,11 +754,11 @@ class TableViewer {
       const mouseY = e.clientY;
       const windowWidth = window.innerWidth;
       const windowHeight = window.innerHeight;
-      
+
       // Adjust position to keep preview on screen
       let adjustedX = mouseX;
       let adjustedY = mouseY;
-      
+
       // If too close to right edge, show on left side of cursor
       if (mouseX > windowWidth - 420) { // 400px preview width + 20px margin
         adjustedX = mouseX;
@@ -755,11 +766,11 @@ class TableViewer {
       } else {
         document.documentElement.style.setProperty('--preview-transform', 'translate(15px, -50%)');
       }
-      
+
       // Keep some margin from edges
       if (adjustedY < 50) adjustedY = 50;
       if (adjustedY > windowHeight - 50) adjustedY = windowHeight - 50;
-      
+
       document.documentElement.style.setProperty('--mouse-x', adjustedX + 'px');
       document.documentElement.style.setProperty('--mouse-y', adjustedY + 'px');
     }
@@ -794,12 +805,12 @@ class TableViewer {
   renderValueContent(value) {
     if (Array.isArray(value)) {
       if (value.length === 0) return '<div class="empty-state">Empty array</div>';
-      
+
       // For large arrays, show pagination
       if (value.length > 100) {
         return this.renderPaginatedArray(value);
       }
-      
+
       return `
         <div class="array-content">
           <div class="content-header">Array (${value.length} items)</div>
@@ -818,7 +829,7 @@ class TableViewer {
     if (typeof value === 'object' && value !== null) {
       const entries = Object.entries(value);
       if (entries.length === 0) return '<div class="empty-state">Empty object</div>';
-      
+
       return `
         <div class="object-content">
           <div class="content-header">Object (${entries.length} properties)</div>
@@ -840,7 +851,7 @@ class TableViewer {
   renderPaginatedArray(array) {
     const pageSize = 50;
     const totalPages = Math.ceil(array.length / pageSize);
-    
+
     return `
       <div class="paginated-array">
         <div class="content-header">Large Array (${array.length} items) - Showing first ${Math.min(pageSize, array.length)}</div>
@@ -876,7 +887,7 @@ class TableViewer {
       this.performSearch(query);
       this.searchQuery = query.toLowerCase(); // Store for highlighting
     }
-    
+
     // Keep expansions when searching - don't clear them
     this.render();
   }
@@ -884,12 +895,12 @@ class TableViewer {
   performSearch(query) {
     const lowerQuery = query.toLowerCase();
     const startTime = performance.now();
-    
+
     this.filteredData = this.originalData.filter(row => {
       // Quick string search first (fastest)
       const rowString = JSON.stringify(row).toLowerCase();
       if (rowString.includes(lowerQuery)) return true;
-      
+
       // If not found in JSON string, skip expensive deep search
       return false;
     });
@@ -906,75 +917,72 @@ class TableViewer {
         this.expandAllNested(value, stableRowId, col, '');
       });
     });
-    
+
     // Simple re-render
     this.render();
   }
 
-  expandAllNested(value, rowIndex, col, nestedPath) {
-    if (Array.isArray(value) && value.length > 0) {
-      // Expand this array
-      const arrayKey = nestedPath ? `${rowIndex}-${col}-${nestedPath}-array` : `${rowIndex}-${col}`;
-      this.expandedArrays.add(arrayKey);
-      
-      // Recursively expand nested objects/arrays within array items
-      value.forEach((item, itemIndex) => {
-        if (typeof item === 'object' && item !== null) {
-          Object.keys(item).forEach(itemKey => {
-            const nestedValue = item[itemKey];
-            const newPath = nestedPath ? `${nestedPath}-${itemIndex}-${itemKey}` : `${itemIndex}-${itemKey}`;
-            this.expandAllNested(nestedValue, rowIndex, col, newPath);
-          });
-        }
-      });
-    } else if (typeof value === 'object' && value !== null && Object.keys(value).length > 0) {
-      // Expand this object
-      const objectKey = nestedPath ? `${rowIndex}-${col}-${nestedPath}-object` : `${rowIndex}-${col}-object`;
-      this.expandedArrays.add(objectKey);
-      
-      // Recursively expand nested objects/arrays within this object
-      Object.keys(value).forEach(key => {
-        const nestedValue = value[key];
-        const newPath = nestedPath ? `${nestedPath}-${key}` : key;
-        this.expandAllNested(nestedValue, rowIndex, col, newPath);
-      });
+  getLikelyCsvDelimiter() {
+    const locale = navigator.language || navigator.userLanguage;
+    // List of locales where semicolon is commonly used
+    const semicolonLocales = [
+      'de', // German
+      'fr', // French
+      'it', // Italian
+      'es', // Spanish
+      'ru', // Russian
+      'pl', // Polish
+      'nl', // Dutch
+      'da', // Danish
+      'fi', // Finnish
+      'sv', // Swedish
+      'cs', // Czech
+      'hu', // Hungarian
+      'tr', // Turkish
+      'pt-PT', // Portuguese (Portugal)
+      'sl', // Slovenian
+      'sk', // Slovak
+      'hr', // Croatian
+      'lt', // Lithuanian
+      'lv', // Latvian
+      'et', // Estonian
+      // Add more as needed
+    ];
+    // Check if the user's locale starts with any of the semicolon locales
+    if (semicolonLocales.some(code => locale.startsWith(code))) {
+      return ';';
     }
+    return ',';
   }
 
-  collapseAll() {
-    const expandedCount = this.expandedArrays.size;
-    this.expandedArrays.clear();
-    
-    // Simple re-render
-    this.render();
-  }
   exportCSV() {
-    const headers = this.columns.join(',');
+    const delimiter = this.csvDelimiter;
+    const headers = this.columns.join(delimiter);
     const rows = this.filteredData.map(row =>
       this.columns.map(col => {
         const value = row[col] || '';
         let csvValue = '';
-        
+
         if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
           // Convert arrays and objects to JSON string format
           csvValue = `"${JSON.stringify(value).replace(/"/g, '""')}"`;
         } else {
           csvValue = `"${String(value).replace(/"/g, '""')}"`;
         }
-        
+
         return csvValue;
-      }).join(',')
+      }).join(delimiter)
     );
 
     const csv = [headers, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.href = url;
     a.download = 'json-table-export.csv';
     a.click();
-    
+
     URL.revokeObjectURL(url);
   }
 }
