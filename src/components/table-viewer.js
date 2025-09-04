@@ -49,10 +49,9 @@ class TableViewer {
     // Track column statistics and preserve discovery order
     const columnStats = new Map();
     const columnOrder = []; // Track the order columns are first discovered
-    const sampleSize = Math.min(data.length, 100); // Sample first 100 rows for analysis
 
     // Analyze columns and count non-null values, preserving discovery order
-    data.slice(0, sampleSize).forEach(row => {
+    data.forEach(row => {
       if (row && typeof row === 'object') {
         Object.keys(row).forEach(key => {
           if (!columnStats.has(key)) {
@@ -180,11 +179,8 @@ class TableViewer {
     const columnSet = new Set();
     const columnPriority = new Map();
 
-    // Sample more items for better column detection
-    const sampleSize = Math.min(50, arrayItems.length);
-    const sampleItems = arrayItems.slice(0, sampleSize);
-
-    sampleItems.forEach((item, index) => {
+    // Analyze all items for complete column detection
+    arrayItems.forEach((item, index) => {
       if (typeof item === 'object' && item !== null) {
         Object.keys(item).forEach(key => {
           columnSet.add(key);
@@ -216,8 +212,8 @@ class TableViewer {
       return bFreq - aFreq;
     });
 
-    // Limit to 10 columns for better display
-    return columns.slice(0, 10);
+    // Return all columns without limit
+    return columns;
   }
 
   formatArrayCellValue(value) {
@@ -521,8 +517,6 @@ class TableViewer {
             } else {
               displayValue = `{${Object.keys(propValue).length} props}`;
             }
-          } else if (typeof propValue === 'string' && propValue.length > 30) {
-            displayValue = propValue.substring(0, 30) + '...';
           } else {
             displayValue = String(propValue);
           }
@@ -551,15 +545,11 @@ class TableViewer {
       }
     }
 
-    // Truncate very long strings (but check for images first)
+    // Check if it's an image URL for special rendering
     if (typeof value === 'string') {
       // Check if it's an image URL first
       if (this.isImageUrl(value)) {
         return this.renderImageValue(value);
-      }
-      // Then check for length truncation
-      if (value.length > 50) {
-        return value.substring(0, 50) + '...';
       }
     }
 
@@ -669,7 +659,7 @@ class TableViewer {
         />
         <div class="image-preview">
           <img src="${imageSrc}" alt="Enlarged image" onerror="this.parentElement.style.display='none';" />
-          <div class="preview-info">${displayUrl.length > 60 ? displayUrl.substring(0, 60) + '...' : displayUrl}</div>
+          <div class="preview-info">${displayUrl}</div>
         </div>
         <div class="image-url-display" style="display: none; font-size: 11px; color: #6b7280; word-break: break-all;">
           ${this.highlightSearchTerm(displayUrl)}
@@ -854,16 +844,15 @@ class TableViewer {
 
     return `
       <div class="paginated-array">
-        <div class="content-header">Large Array (${array.length} items) - Showing first ${Math.min(pageSize, array.length)}</div>
+        <div class="content-header">Array (${array.length} items)</div>
         <div class="array-items">
-          ${array.slice(0, pageSize).map((item, idx) => `
+          ${array.map((item, idx) => `
             <div class="array-item">
               <span class="item-index">[${idx}]</span>
               <span class="item-value">${this.formatModalValue(item)}</span>
             </div>
           `).join('')}
         </div>
-        ${totalPages > 1 ? `<div class="pagination-info">Showing 1-${pageSize} of ${array.length} items</div>` : ''}
       </div>
     `;
   }

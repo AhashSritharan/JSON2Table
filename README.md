@@ -43,7 +43,7 @@ A high-performance Chrome extension that automatically converts JSON data into i
   - Boolean indicators (✓/✗)
   - Number formatting with locale support
   - Null/undefined handling
-  - Long text truncation with ellipsis
+  - Full text display without truncation
 
 ## 🛠️ How It Works
 

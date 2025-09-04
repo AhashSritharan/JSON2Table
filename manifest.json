@@ -23,7 +23,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "<all_urls>"
+      ],
       "js": [
         "src/utils/json-detector.js",
         "src/utils/data-flattener.js",
@@ -40,8 +42,14 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["table-viewer.html", "table-viewer.js", "table-viewer.css"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "table-viewer.html",
+        "table-viewer.js",
+        "table-viewer.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }
