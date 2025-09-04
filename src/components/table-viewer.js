@@ -907,67 +907,56 @@ class TableViewer {
   }
 
   expandAll() {
-    // Find all arrays and objects in the current filtered data and expand them recursively
-    this.filteredData.forEach((row, rowIndex) => {
-      const stableRowId = row.__rowId; // Use stable ID instead of changing index
-      this.columns.forEach(col => {
-        const value = row[col];
-        this.expandAllNested(value, stableRowId, col, '');
-      });
-    });
-
-    // Simple re-render
-    this.render();
+    // More reliable approach: directly expand elements instead of simulating clicks
+    this.expandAllRecursive();
   }
 
-  expandAllNested(value, rowId, col, prefix) {
-    // Base case: this isn't an array or object
-    if (typeof value !== 'object' || value === null) {
-      return;
-    }
+  async expandAllRecursive() {
+    let foundExpandables = true;
+    let iterations = 0;
+    const maxIterations = 10; // Prevent infinite loops
 
-    // Expand arrays
-    if (Array.isArray(value)) {
-      // Match the exact format used in formatCellValueWithExpansion
-      const arrayKey = `${rowId}-${col}`;
-      this.expandedArrays.add(arrayKey);
+    // Keep expanding until no more expandables are found
+    while (foundExpandables && iterations < maxIterations) {
+      foundExpandables = false;
+      iterations++;
 
-      // Recursively expand nested objects/arrays within this array
-      value.forEach((item, idx) => {
-        if (typeof item === 'object' && item !== null) {
-          if (Array.isArray(item)) {
-            // For nested arrays, we use the format: rowId-col-index-array
-            const nestedArrayKey = `${rowId}-${col}-${idx}-array`;
-            this.expandedArrays.add(nestedArrayKey);
-          } else {
-            // For nested objects, we use the format: rowId-col-index-object
-            const nestedObjectKey = `${rowId}-${col}-${idx}-object`;
-            this.expandedArrays.add(nestedObjectKey);
+      // Find all currently visible expandable elements that aren't expanded yet
+      const expandableArrays = document.querySelectorAll('.expandable-array[data-array-key]');
+      const expandableObjects = document.querySelectorAll('.expandable-object[data-object-key]');
+
+      // Expand arrays that show [+]
+      expandableArrays.forEach(element => {
+        if (element.textContent.includes('[+]')) {
+          const arrayKey = element.dataset.arrayKey;
+          if (!this.expandedArrays.has(arrayKey)) {
+            this.expandedArrays.add(arrayKey);
+            foundExpandables = true;
           }
         }
       });
-    }
-    // Expand objects
-    else {
-      // Match the exact format used in formatCellValueWithExpansion
-      const objectKey = `${rowId}-${col}-object`;
-      this.expandedArrays.add(objectKey);
 
-      // Recursively expand nested objects/arrays within this object
-      Object.entries(value).forEach(([key, val]) => {
-        if (typeof val === 'object' && val !== null) {
-          if (Array.isArray(val)) {
-            // For nested arrays inside objects, use: rowId-col-key-array
-            const nestedArrayKey = `${rowId}-${col}-${key}-array`;
-            this.expandedArrays.add(nestedArrayKey);
-          } else {
-            // For nested objects inside objects, use: rowId-col-key-object
-            const nestedObjectKey = `${rowId}-${col}-${key}-object`;
-            this.expandedArrays.add(nestedObjectKey);
+      // Expand objects that show [+]  
+      expandableObjects.forEach(element => {
+        if (element.textContent.includes('[+]')) {
+          const objectKey = element.dataset.objectKey;
+          if (!this.expandedArrays.has(objectKey)) {
+            this.expandedArrays.add(objectKey);
+            foundExpandables = true;
           }
         }
       });
+
+      // If we found expandables, render to show newly revealed nested items
+      if (foundExpandables) {
+        this.render();
+        // Small delay to ensure DOM updates complete
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
     }
+
+    // Final render to ensure everything is displayed
+    this.render();
   }
 
   getLikelyCsvDelimiter() {
