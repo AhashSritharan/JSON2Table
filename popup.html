@@ -153,6 +153,95 @@
     .theme-select:hover {
       border-color: #9ca3af;
     }
+
+    /* Manual JSON input styles */
+    .manual-section {
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 12px;
+    }
+
+    .json-textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 12px;
+      resize: vertical;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+
+    .json-textarea:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .json-textarea::placeholder {
+      color: #9ca3af;
+      font-style: italic;
+    }
+
+    .btn-convert {
+      background: #059669;
+      color: white;
+    }
+
+    .btn-convert:hover {
+      background: #047857;
+    }
+
+    .btn-convert:disabled {
+      background: #d1d5db;
+      color: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    .input-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 12px;
+      flex: 1;
+    }
+
+    .btn-paste {
+      background: #6b7280;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-paste:hover {
+      background: #4b5563;
+    }
+
+    .btn-clear {
+      background: #ef4444;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-clear:hover {
+      background: #dc2626;
+    }
   </style>
 </head>
 
@@ -161,9 +250,29 @@
     <div class="logo">JSON2Table</div>
     <div class="subtitle">Convert JSON to interactive tables</div>
   </div>
+
+  <div class="manual-section">
+    <div class="section-title">Manual JSON Conversion</div>
+    <textarea id="jsonInput" class="json-textarea" placeholder='Paste your JSON here, for example:
+{
+  "users": [
+    {"name": "John", "age": 30},
+    {"name": "Jane", "age": 25}
+  ]
+}'></textarea>
+    <div class="input-actions">
+      <button id="pasteBtn" class="btn-paste btn-small">📋 Paste</button>
+      <button id="formatBtn" class="btn-paste btn-small">✨ Format</button>
+      <button id="clearBtn" class="btn-clear btn-small">🗑️ Clear</button>
+    </div>
+    <button id="convertJson" class="btn btn-convert" disabled>
+      Convert JSON to Table
+    </button>
+  </div>
+
   <div class="action-section">
     <button id="detectJson" class="btn btn-primary">
-      Detect & Convert JSON to Table
+      Detect & Convert JSON from Page
     </button>
   </div>
   <div id="status" class="status" style="display: none;"></div>

@@ -7,42 +7,56 @@
 // This file serves as the main coordinator
 
 // Main application initialization
-(function() {
+(function () {
   'use strict';
 
   let detectedData = null;
   let autoConvertEnabled = false;
 
-  // Function to show table viewer in existing container or create new one
+  // Function to show table viewer - completely replaces page content
   function showTableViewer(tableData) {
-    // Check if auto-converted container already exists
-    let container = document.getElementById('json2tableContainer');
-    
-    if (!container) {
-      // Create new container for manual conversion
-      container = document.createElement('div');
-      container.id = 'json2tableContainer';
-      container.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: var(--bg-color, #ffffff);
-        color: var(--text-color, #333333);
-        z-index: 10000;
-        overflow: hidden;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    // Check if we're already displaying a table (avoid clearing if just updating)
+    const existingContainer = document.getElementById('json2tableContainer');
+
+    if (!existingContainer) {
+      // Completely clear the document and replace with our table viewer
+      // This eliminates all CSS conflicts and styling issues
+
+      // Store the original title
+      const originalTitle = document.title;
+
+      // Clear everything
+      document.documentElement.innerHTML = `
+        <head>
+          <meta charset="utf-8">
+          <title>${originalTitle} - JSON2Table</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+        </head>
+        <body style="margin: 0; padding: 0;">
+          <div id="json2tableContainer" style="
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-color, #ffffff);
+            color: var(--text-color, #333333);
+          "></div>
+        </body>
       `;
-      document.body.appendChild(container);
-      
-      // Apply theme for manual conversions
+
+      // Apply theme
       ThemeManager.applyTheme();
     }
 
+    // Get the container (now guaranteed to exist)
+    const container = document.getElementById('json2tableContainer');
+
     // Clear existing content and create viewer
     container.innerHTML = '';
-    
+
     // Use the same interface creation method
     UIUtils.createTableInterface(container, tableData);
   }

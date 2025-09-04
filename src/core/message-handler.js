@@ -38,6 +38,47 @@ class MessageHandler {
         return false;
       }
 
+      if (request.action === 'convertManualJson') {
+        // Handle manual JSON conversion from popup
+        try {
+          const jsonData = request.jsonData;
+
+          console.log('Received manual JSON conversion request', jsonData);
+          console.log('window.showTableViewer available:', !!window.showTableViewer);
+
+          // Process the JSON data the same way as auto-detection
+          const tableData = JSONDetector.extractTableData(jsonData);
+
+          console.log('Extracted table data:', tableData);
+
+          if (!tableData || !Array.isArray(tableData) || tableData.length === 0) {
+            sendResponse({ success: false, error: 'No suitable table data found in JSON' });
+            return true;
+          }
+
+          // Verify the table data contains objects
+          if (!tableData.some(item => item && typeof item === 'object' && !Array.isArray(item))) {
+            sendResponse({ success: false, error: 'Table data must contain objects' });
+            return true;
+          }
+
+          // Use the showTableViewer function from content-main.js
+          if (window.showTableViewer) {
+            window.showTableViewer(tableData);
+            console.log('Successfully called showTableViewer with processed data');
+            sendResponse({ success: true });
+          } else {
+            console.error('showTableViewer function not available on window object');
+            sendResponse({ success: false, error: 'Table viewer not available - content script may not be loaded' });
+          }
+        } catch (error) {
+          console.error('Manual JSON conversion error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+
+        return true; // Will respond asynchronously
+      }
+
       if (request.action === 'detectJSON') {
         // Use the same successful auto-convert logic
         AutoJSONDetector.checkAndConvert().then(result => {
