@@ -127,7 +127,15 @@ class TableViewer {
       <tr data-row-index="${rowIndex}" class="main-row">
         ${this.columns.map(col => {
       const value = row[col];
-      const cellContent = this.formatCellValueWithExpansion(value, stableRowId, col);
+
+      // For property-value format, create unique expand keys based on the property name
+      let expandRowId = stableRowId;
+      if (col === 'value' && row.property) {
+        // Use the property name to create unique expand keys for each property's value
+        expandRowId = `${stableRowId}-${row.property}`;
+      }
+
+      const cellContent = this.formatCellValueWithExpansion(value, expandRowId, col);
       // Determine if this cell needs wide content class
       const isWideContent = this.shouldUseWideContent(value, cellContent);
       const widthClass = isWideContent ? ' wide-content' : '';
@@ -216,16 +224,161 @@ class TableViewer {
     return columns;
   }
 
-  formatArrayCellValue(value) {
+  // Shared base formatting method for consistent value rendering
+  formatBasicValue(value, context = 'basic', expandParams = null) {
     if (value === null || value === undefined) return '<span class="null-value">-</span>';
 
-    const stringValue = String(value);
+    // Handle arrays and objects - check if they should be expandable
+    if (Array.isArray(value)) {
+      // If we have expand parameters, make it expandable
+      if (expandParams && expandParams.rowIndex !== undefined && expandParams.col !== undefined) {
+        const count = value.length;
+        const arrayKey = `${expandParams.rowIndex}-${expandParams.col}`;
+        const isExpanded = this.expandedArrays.has(arrayKey);
+        const expandIcon = isExpanded ? '[-]' : '[+]';
+
+        let html = `<span class="array-badge expandable-array" data-array-key="${arrayKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} array">
+          ${expandIcon} [${count}] ${count === 1 ? 'item' : 'items'}
+        </span>`;
+
+        // Add expansion content if expanded
+        if (isExpanded && value.length > 0) {
+          const arrayColumns = this.getArrayColumns(value);
+          html += `
+            <div class="inline-array-expansion" data-array-key="${arrayKey}">
+              <div class="inline-expansion-header">Array Items (${count}):</div>
+              <div class="inline-array-table-wrapper">
+                <table class="inline-table">
+                  <thead>
+                    <tr>
+                      ${arrayColumns.map(col => `<th>${UIUtils.formatColumnName(col)}</th>`).join('')}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${value.map((item, itemIndex) => {
+            if (typeof item === 'object' && item !== null) {
+              return `<tr class="inline-table-row">
+                          ${arrayColumns.map((acol, colIndex) => {
+                const cellValue = item[acol];
+                // Create unique expand parameters for nested items
+                const nestedExpandParams = {
+                  rowIndex: `${expandParams.rowIndex}-${expandParams.col}-item${itemIndex}`,
+                  col: acol
+                };
+                return `<td class="inline-table-cell">${cellValue !== undefined ? this.highlightSearchTerm(this.formatBasicValue(cellValue, 'array', nestedExpandParams)) : '<span class="null-value">-</span>'}</td>`;
+              }).join('')}
+                        </tr>`;
+            } else {
+              return `<tr class="inline-table-row">
+                          <td class="inline-table-cell" colspan="${arrayColumns.length}">
+                            <span class="inline-value">${this.highlightSearchTerm(this.formatBasicValue(item, 'inline'))}</span>
+                          </td>
+                        </tr>`;
+            }
+          }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>`;
+        }
+
+        return html;
+      }
+
+      // Non-expandable array summary
+      return `<span class="nested-array">[${value.length} items]</span>`;
+    }
+
+    if (typeof value === 'object' && value !== null) {
+      const keys = Object.keys(value);
+
+      // If we have expand parameters, make it expandable
+      if (expandParams && expandParams.rowIndex !== undefined && expandParams.col !== undefined) {
+        const propCount = keys.length;
+        if (propCount === 0) return '<span class="empty-object">{}</span>';
+
+        const objectKey = `${expandParams.rowIndex}-${expandParams.col}-object`;
+        const isExpanded = this.expandedArrays.has(objectKey);
+        const expandIcon = isExpanded ? '[-]' : '[+]';
+
+        let html = `<span class="object-badge expandable-object" data-object-key="${objectKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} object properties">
+          ${expandIcon} {${propCount}} ${propCount === 1 ? 'property' : 'properties'}
+        </span>`;
+
+        // Add expansion content if expanded
+        if (isExpanded) {
+          html += `
+            <div class="inline-object-expansion" data-object-key="${objectKey}">
+              <div class="inline-expansion-header">Properties (${propCount}):</div>
+              <div class="inline-object-table-wrapper">
+                <table class="inline-table">
+                  <thead>
+                    <tr>
+                      <th>Property</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${Object.entries(value).map(([key, val]) => {
+            const isWideContent = this.shouldUseWideContent(val, null, 'inline-table');
+            const widthClass = isWideContent ? ' wide-content' : '';
+
+            // Create unique expand parameters for nested object properties
+            const nestedExpandParams = {
+              rowIndex: `${expandParams.rowIndex}-${expandParams.col}-prop-${key}`,
+              col: 'value'
+            };
+
+            return `<tr class="inline-table-row">
+                        <td class="inline-table-cell inline-property-name">${this.highlightSearchTerm(key)}</td>
+                        <td class="inline-table-cell inline-property-value${widthClass}">${this.highlightSearchTerm(this.formatBasicValue(val, 'inline', nestedExpandParams))}</td>
+                      </tr>`;
+          }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>`;
+        }
+
+        return html;
+      }
+
+      // For inline context, show detailed view for simple objects
+      if (context === 'inline' && keys.length <= 4) {
+        const props = keys.map(key => {
+          const propValue = value[key];
+          let displayValue;
+
+          // Handle nested values more gracefully
+          if (typeof propValue === 'object' && propValue !== null) {
+            if (Array.isArray(propValue)) {
+              displayValue = `[${propValue.length} items]`;
+            } else {
+              displayValue = `{${Object.keys(propValue).length} props}`;
+            }
+          } else {
+            displayValue = String(propValue);
+          }
+
+          return `<strong>${key}:</strong> ${displayValue}`;
+        }).join(', ');
+
+        return `<span class="nested-object-detailed">{${props}}</span>`;
+      } else {
+        // For complex objects or array context, show summary
+        return `<span class="nested-object">{${keys.length} props}</span>`;
+      }
+    }
 
     // Format dates
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
       try {
         const date = new Date(value);
-        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (context === 'array') {
+          return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else {
+          return `<span class="date-value">${date.toLocaleDateString()}</span>`;
+        }
       } catch (e) {
         // Fall through to regular formatting
       }
@@ -233,7 +386,8 @@ class TableViewer {
 
     // Format booleans
     if (typeof value === 'boolean') {
-      return `<span class="boolean-value ${value ? 'true' : 'false'}">${value ? '✓' : '✗'}</span>`;
+      const className = context === 'array' ? (value ? 'true' : 'false') : value.toString();
+      return `<span class="boolean-value ${className}">${value ? '✓' : '✗'}</span>`;
     }
 
     // Format numbers
@@ -241,8 +395,19 @@ class TableViewer {
       return value % 1 === 0 ? value.toString() : value.toFixed(2);
     }
 
+    // Check if it's an image URL for special rendering
+    if (typeof value === 'string') {
+      if (this.isImageUrl(value)) {
+        return this.renderImageValue(value);
+      }
+    }
+
     // Return full string for complete text selection
-    return stringValue;
+    return String(value);
+  }
+
+  formatArrayCellValue(value) {
+    return this.formatBasicValue(value, 'array');
   }
 
   escapeHtml(text) {
@@ -252,41 +417,7 @@ class TableViewer {
   }
 
   formatObjectPropertyValue(value) {
-    if (value === null || value === undefined) return '<span class="null-value">-</span>';
-
-    const stringValue = String(value);
-
-    // Format dates
-    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
-      try {
-        const date = new Date(value);
-        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      } catch (e) {
-        // Fall through to regular formatting
-      }
-    }
-
-    // Format booleans
-    if (typeof value === 'boolean') {
-      return `<span class="boolean-value ${value ? 'true' : 'false'}">${value ? '✓' : '✗'}</span>`;
-    }
-
-    // Format numbers
-    if (typeof value === 'number') {
-      return value % 1 === 0 ? value.toString() : value.toFixed(2);
-    }
-
-    // Handle arrays and objects
-    if (Array.isArray(value)) {
-      return `<span class="nested-array">[${value.length} items]</span>`;
-    }
-
-    if (typeof value === 'object' && value !== null) {
-      return `<span class="nested-object">{${Object.keys(value).length} props}</span>`;
-    }
-
-    // Return full string for complete text selection
-    return stringValue;
+    return this.formatBasicValue(value, 'array'); // Use array context for consistent date/time formatting
   }
 
   getValueType(value) {
@@ -299,109 +430,8 @@ class TableViewer {
   formatCellValueWithExpansion(value, rowIndex, col) {
     if (value === null || value === undefined) return '';
 
-    if (Array.isArray(value)) {
-      const count = value.length;
-      const arrayKey = `${rowIndex}-${col}`;
-      const isExpanded = this.expandedArrays.has(arrayKey);
-      const expandIcon = isExpanded ? '[-]' : '[+]';
-
-      let html = `<span class="array-badge expandable-array" data-array-key="${arrayKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} array">
-        ${expandIcon} [${count}] ${count === 1 ? 'item' : 'items'}
-      </span>`;
-
-      // Add inline expansion content
-      if (isExpanded && value.length > 0) {
-        const arrayColumns = this.getArrayColumns(value);
-        html += `
-          <div class="inline-array-expansion" data-array-key="${arrayKey}">
-            <div class="inline-expansion-header">Array Items (${count}):</div>
-            <div class="inline-array-table-wrapper">
-              <table class="inline-table">
-                <thead>
-                  <tr>
-                    ${arrayColumns.map(col => `<th>${UIUtils.formatColumnName(col)}</th>`).join('')}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${value.map((item, itemIndex) => {
-          if (typeof item === 'object' && item !== null) {
-            return `<tr class="inline-table-row">
-                        ${arrayColumns.map(acol => {
-              const cellValue = item[acol];
-              return `<td class="inline-table-cell">${cellValue !== undefined ? this.highlightSearchTerm(this.formatArrayCellValue(cellValue)) : '<span class="null-value">-</span>'}</td>`;
-            }).join('')}
-                      </tr>`;
-          } else {
-            return `<tr class="inline-table-row">
-                        <td class="inline-table-cell" colspan="${arrayColumns.length}">
-                          <span class="inline-value">${this.highlightSearchTerm(this.formatInlineValue(item))}</span>
-                        </td>
-                      </tr>`;
-          }
-        }).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>`;
-      }
-
-      return html;
-    }
-
-    if (typeof value === 'object') {
-      const propCount = Object.keys(value).length;
-      if (propCount === 0) return '<span class="empty-object">{}</span>';
-
-      const objectKey = `${rowIndex}-${col}-object`;
-      const isExpanded = this.expandedArrays.has(objectKey); // Reuse same tracking set
-      const expandIcon = isExpanded ? '[-]' : '[+]';
-
-      let html = `<span class="object-badge expandable-object" data-object-key="${objectKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} object properties">
-        ${expandIcon} {${propCount}} ${propCount === 1 ? 'property' : 'properties'}
-      </span>`;
-
-      // Add inline expansion content in table format
-      if (isExpanded) {
-        html += `
-          <div class="inline-object-expansion" data-object-key="${objectKey}">
-            <div class="inline-expansion-header">Properties (${propCount}):</div>
-            <div class="inline-object-table-wrapper">
-              <table class="inline-table">
-                <thead>
-                  <tr>
-                    <th>Property</th>
-                    <th>Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${Object.entries(value).map(([key, val]) => {
-          // Determine if this property value needs wide content class (inline context)
-          const isWideContent = this.shouldUseWideContent(val, null, 'inline-table');
-          const widthClass = isWideContent ? ' wide-content' : '';
-
-          return `<tr class="inline-table-row">
-                      <td class="inline-table-cell inline-property-name">${this.highlightSearchTerm(key)}</td>
-                      <td class="inline-table-cell inline-property-value${widthClass}">${this.highlightSearchTerm(this.formatInlineValue(val, rowIndex, col, key))}</td>
-                    </tr>`;
-        }).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>`;
-      }
-
-      return html;
-    }
-
-    const stringValue = String(value);
-
-    // Check if the string value is an image URL
-    if (this.isImageUrl(stringValue)) {
-      return this.renderImageValue(stringValue);
-    }
-
-    // Apply search highlighting to the value
-    return this.highlightSearchTerm(stringValue);
+    // Use the unified formatBasicValue with expandable parameters
+    return this.formatBasicValue(value, 'main', { rowIndex, col });
   }
 
   formatInlineValue(value, parentRowIndex = null, parentCol = null, nestedKey = null) {
@@ -531,31 +561,8 @@ class TableViewer {
       }
     }
 
-    if (typeof value === 'boolean') {
-      return `<span class="boolean-value ${value}">${value ? '✓' : '✗'}</span>`;
-    }
-
-    // Format dates
-    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
-      try {
-        const date = new Date(value);
-        return `<span class="date-value">${date.toLocaleDateString()}</span>`;
-      } catch (e) {
-        // Fall through to regular formatting
-      }
-    }
-
-    // Check if it's an image URL for special rendering
-    if (typeof value === 'string') {
-      // Check if it's an image URL first
-      if (this.isImageUrl(value)) {
-        return this.renderImageValue(value);
-      }
-    }
-
-    const stringValue = String(value);
-    // Return full string for complete text selection
-    return stringValue;
+    // For basic values (non-expandable), use the shared formatting logic
+    return this.formatBasicValue(value, 'inline');
   }
 
   highlightSearchTerm(text) {
