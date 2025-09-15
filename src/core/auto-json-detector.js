@@ -34,9 +34,7 @@ class AutoJSONDetector {
 
     const rawLength = rawPreContent.length;
 
-    if (rawLength > 3000000) {
-      return { converted: false, note: 'Too long (>3MB)' };
-    }
+    // Size limit removed - can handle any size JSON file
 
     if (!/^\s*[\{\[]/.test(rawPreContent)) {
       return { converted: false, note: 'Does not start with { or [' };
@@ -56,7 +54,7 @@ class AutoJSONDetector {
 
     // Check if it's suitable for table conversion
     const tableData = JSONDetector.extractTableData(parsedJsonValue);
-    
+
     if (!tableData || !Array.isArray(tableData) || tableData.length === 0) {
       return { converted: false, note: 'No suitable table data found' };
     }

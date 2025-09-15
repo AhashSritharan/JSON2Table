@@ -80,6 +80,43 @@ class StyleManager {
       .expandable-array:hover, .expandable-object:hover {
         opacity: 0.8;
       }
+      
+      /* Focus navigation styles */
+      .focus-btn {
+        display: inline-block;
+        background: var(--button-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 3px;
+        padding: 2px 4px;
+        margin-left: 4px;
+        cursor: pointer;
+        font-size: 10px;
+        vertical-align: middle;
+        transition: all 0.2s ease;
+      }
+      .focus-btn:hover {
+        background: var(--button-hover);
+        transform: scale(1.1);
+      }
+      
+      /* Breadcrumb styles */
+      .breadcrumb-root, .breadcrumb-current {
+        font-weight: 500;
+        color: var(--text-color);
+      }
+      .breadcrumb-link {
+        color: var(--button-active);
+        cursor: pointer;
+        text-decoration: underline;
+      }
+      .breadcrumb-link:hover {
+        color: var(--button-hover);
+      }
+      .breadcrumb-separator {
+        margin: 0 8px;
+        color: var(--text-muted);
+      }
+      
       .json2table-expanded-row {
         background: var(--expand-bg) !important;
       }

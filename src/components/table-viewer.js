@@ -12,6 +12,17 @@ class TableViewer {
     this.columns = this.extractColumns(data);
     this.csvDelimiter = ','; // Default delimiter
 
+    // Focus navigation state - simplified object reference system
+    this.focusStack = []; // Stack of previous focus contexts
+    this.rootData = data; // Always preserve the original root data
+    this.currentData = data; // What's currently being displayed
+    this.currentContext = { // Context information for the current view
+      data: data,
+      displayName: 'Root',
+      breadcrumbPath: []
+    }
+    this.focusObjectRegistry = new Map(); // Registry to store object references for focus buttons
+
     // Get CSV delimiter from settings
     chrome.storage.local.get(['csvDelimiter'], (result) => {
       if (result.csvDelimiter) {
@@ -109,6 +120,7 @@ class TableViewer {
 
     this.container.innerHTML = html;
     this.attachOptimizedEventListeners();
+    this.updateFocusUI();
   }
 
   renderAllRows() {
@@ -241,6 +253,11 @@ class TableViewer {
           ${expandIcon} [${count}] ${count === 1 ? 'item' : 'items'}
         </span>`;
 
+        // Add focus button for arrays
+        const displayName = `${expandParams.col} (Array)`;
+        const focusId = this.registerFocusObject(value, displayName);
+        html += `<button class="focus-btn" data-focus-id="${focusId}" title="Focus on this array">🔍</button>`;
+
         // Add expansion content if expanded
         if (isExpanded && value.length > 0) {
           const arrayColumns = this.getArrayColumns(value);
@@ -304,6 +321,11 @@ class TableViewer {
         let html = `<span class="object-badge expandable-object" data-object-key="${objectKey}" title="Click to ${isExpanded ? 'collapse' : 'expand'} object properties">
           ${expandIcon} {${propCount}} ${propCount === 1 ? 'property' : 'properties'}
         </span>`;
+
+        // Add focus button for objects
+        const displayName = `${expandParams.col} (Object)`;
+        const focusId = this.registerFocusObject(value, displayName);
+        html += `<button class="focus-btn" data-focus-id="${focusId}" title="Focus on this object">🔍</button>`;
 
         // Add expansion content if expanded
         if (isExpanded) {
@@ -684,6 +706,14 @@ class TableViewer {
     this.handleTableClick = this.handleTableClick.bind(this);
     this.container.addEventListener('click', this.handleTableClick);
 
+    // Add breadcrumb click handling
+    const breadcrumbContainer = document.getElementById('json2table-breadcrumb');
+    if (breadcrumbContainer) {
+      breadcrumbContainer.removeEventListener('click', this.handleBreadcrumbClick);
+      this.handleBreadcrumbClick = this.handleBreadcrumbClick.bind(this);
+      breadcrumbContainer.addEventListener('click', this.handleBreadcrumbClick);
+    }
+
     // Add mouse tracking for image preview positioning
     this.container.removeEventListener('mousemove', this.handleMouseMove);
     this.handleMouseMove = this.handleMouseMove.bind(this);
@@ -691,6 +721,24 @@ class TableViewer {
   }
 
   handleTableClick(e) {
+    // Handle focus button clicks
+    const focusBtn = e.target.closest('.focus-btn');
+    if (focusBtn) {
+      console.log('Focus button clicked!', focusBtn);
+      e.stopPropagation(); // Prevent other click handlers
+      const focusId = focusBtn.dataset.focusId;
+      console.log('Focus ID:', focusId);
+
+      // Get the focus object by ID
+      const focusObject = this.getFocusObject(focusId);
+      console.log('Focus object:', focusObject);
+      if (focusObject) {
+        console.log('About to focus on:', focusObject.displayName);
+        this.focusOn(focusObject.data, focusObject.displayName, focusObject.breadcrumbPath);
+      }
+      return;
+    }
+
     // Handle array expansion/collapse badges
     const arrayBadge = e.target.closest('.expandable-array');
     if (arrayBadge) {
@@ -718,6 +766,19 @@ class TableViewer {
       if (typeof value === 'object' && !Array.isArray(value)) {
         this.showValueModal(value, `${col} (Row ${rowIndex + 1})`);
       }
+    }
+  }
+
+  handleBreadcrumbClick(e) {
+    // Handle breadcrumb clicks
+    const breadcrumbLink = e.target.closest('.breadcrumb-link');
+    if (breadcrumbLink) {
+      console.log('Breadcrumb clicked!', breadcrumbLink);
+      e.stopPropagation();
+      const level = parseInt(breadcrumbLink.dataset.focusLevel);
+      console.log('Focusing to level:', level);
+      this.focusToLevel(level);
+      return;
     }
   }
 
@@ -1028,6 +1089,234 @@ class TableViewer {
     a.click();
 
     URL.revokeObjectURL(url);
+  }
+
+  // Focus Navigation Methods
+
+  /**
+   * Focus on a specific nested data structure
+   * @param {Array|Object} targetData - The data to focus on
+   * @param {string} displayName - Human-readable name for breadcrumb
+   * @param {Array} breadcrumbPath - Full breadcrumb path for this focus
+   */
+  focusOn(targetData, displayName, breadcrumbPath) {
+    // Save current state to stack
+    this.focusStack.push({
+      context: { ...this.currentContext },
+      expandedState: new Set(this.expandedArrays),
+      columns: [...this.columns],
+      originalData: [...this.originalData],
+      filteredData: [...this.filteredData]
+    });
+
+    // Update to new focus
+    this.currentData = targetData;
+    this.currentContext = {
+      data: targetData,
+      displayName: displayName,
+      breadcrumbPath: breadcrumbPath
+    };
+    this.expandedArrays.clear(); // Reset expansions
+    this.focusObjectRegistry.clear(); // Clear previous focus object registry
+
+    // Process the focused data through the same pipeline as constructor
+    const processedData = JSONDetector.extractTableData(targetData);
+
+    // Update table data and columns
+    this.originalData = processedData.map((row, index) => ({
+      ...row,
+      __rowId: index
+    }));
+    this.filteredData = this.originalData;
+    this.columns = this.extractColumns(processedData);
+
+    // Re-render table and update UI
+    this.render();
+    this.updateFocusUI();
+
+    // Check if auto-expand is enabled and expand all automatically for focused data
+    ThemeManager.getSettings().then(settings => {
+      if (settings.autoExpand) {
+        // Small delay to ensure table is fully rendered
+        setTimeout(() => {
+          this.expandAll();
+        }, 100);
+      }
+    });
+  }
+
+  /**
+   * Navigate back one level in focus stack
+   */
+  focusBack() {
+    if (this.focusStack.length === 0) return;
+
+    const previousState = this.focusStack.pop();
+
+    // Restore previous state
+    this.currentData = previousState.context.data;
+    this.currentContext = previousState.context;
+    this.expandedArrays = previousState.expandedState;
+    this.columns = previousState.columns;
+    this.originalData = previousState.originalData;
+    this.filteredData = previousState.filteredData;
+    this.focusObjectRegistry.clear(); // Clear focus object registry
+
+    // Re-render
+    this.render();
+    this.updateFocusUI();
+  }  /**
+   * Return to root level
+   */
+  focusToRoot() {
+    // Clear the entire focus stack
+    this.focusStack = [];
+    this.currentData = this.rootData;
+    this.currentContext = {
+      data: this.rootData,
+      displayName: 'Root',
+      breadcrumbPath: []
+    };
+    this.expandedArrays.clear();
+    this.focusObjectRegistry.clear();
+
+    // Restore original table state
+    const processedData = JSONDetector.extractTableData(this.rootData);
+    this.originalData = processedData.map((row, index) => ({
+      ...row,
+      __rowId: index
+    }));
+    this.filteredData = this.originalData;
+    this.columns = this.extractColumns(processedData);
+
+    // Re-render
+    this.render();
+    this.updateFocusUI();
+
+    // Check if auto-expand is enabled and expand all automatically when returning to root
+    ThemeManager.getSettings().then(settings => {
+      if (settings.autoExpand) {
+        // Small delay to ensure table is fully rendered
+        setTimeout(() => {
+          this.expandAll();
+        }, 100);
+      }
+    });
+  }
+
+  /**
+   * Navigate to a specific level in the breadcrumb path
+   * @param {number} level - The level to navigate to (0 = root)
+   */
+  focusToLevel(level) {
+    console.log(`focusToLevel called with level: ${level}, current stack length: ${this.focusStack.length}`);
+
+    if (level === 0) {
+      console.log('Navigating to root');
+      this.focusToRoot();
+      return;
+    }
+
+    // Navigate back to the specified level
+    console.log(`Navigating back to level ${level}`);
+    while (this.focusStack.length > level) {
+      this.focusBack();
+    }
+  }
+
+  /**
+   * Register an object for focus navigation and return a unique ID
+   * @param {*} targetData - The data object to focus on
+   * @param {string} displayName - Human-readable name for the object
+   * @param {Array} breadcrumbPath - Path for breadcrumb display
+   * @returns {string} Unique ID for the focus button
+   */
+  registerFocusObject(targetData, displayName, breadcrumbPath = []) {
+    const focusId = `focus_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.focusObjectRegistry.set(focusId, {
+      data: targetData,
+      displayName: displayName,
+      breadcrumbPath: [...this.currentContext.breadcrumbPath, displayName]
+    });
+    return focusId;
+  }  /**
+   * Get a focus object by its registered ID
+   * @param {string} focusId - The ID of the registered focus object
+   * @returns {Object|null} The focus object data or null if not found
+   */
+  getFocusObject(focusId) {
+    return this.focusObjectRegistry.get(focusId) || null;
+  }
+
+  /**
+   * Update the focus back button visibility and breadcrumb display
+   */
+  updateFocusUI() {
+    const backButton = document.getElementById('json2table-focus-back');
+    const breadcrumbContainer = document.getElementById('json2table-breadcrumb');
+
+    const isInFocusedView = this.focusStack.length > 0;
+
+    if (isInFocusedView) {
+      // Show focus UI elements
+      if (backButton) {
+        backButton.style.display = 'block';
+      }
+      if (breadcrumbContainer) {
+        breadcrumbContainer.style.display = 'block';
+      }
+    } else {
+      // Hide focus UI elements  
+      if (backButton) {
+        backButton.style.display = 'none';
+      }
+      if (breadcrumbContainer) {
+        breadcrumbContainer.style.display = 'none';
+      }
+    }
+
+    this.updateBreadcrumb();
+    this.updateFocusedTitle();
+  }
+
+  updateBreadcrumb() {
+    const breadcrumbContainer = document.getElementById('json2table-breadcrumb');
+    if (!breadcrumbContainer) return;
+
+    const breadcrumbPath = this.currentContext.breadcrumbPath;
+
+    if (breadcrumbPath.length === 0) {
+      breadcrumbContainer.innerHTML = '<span class="breadcrumb-root">Root</span>';
+      return;
+    }
+
+    const segments = ['Root', ...breadcrumbPath];
+    const breadcrumbHTML = segments.map((segment, index) => {
+      const isLast = index === segments.length - 1;
+      const level = index; // Level should match the focus stack depth: Root=0, first focus=1, etc.
+
+      if (isLast) {
+        return `<span class="breadcrumb-current">${segment}</span>`;
+      } else {
+        return `<span class="breadcrumb-link" data-focus-level="${level}">${segment}</span>`;
+      }
+    }).join('<span class="breadcrumb-separator"> > </span>');
+
+    breadcrumbContainer.innerHTML = breadcrumbHTML;
+  }
+
+  /**
+   * Update the table title to show focused state
+   */
+  updateFocusedTitle() {
+    const titleElement = document.querySelector('.json2table-title');
+    if (!titleElement) return;
+
+    const rowCount = this.filteredData.length;
+    const isInFocusedView = this.focusStack.length > 0;
+    const focusIndicator = isInFocusedView ? ` - ${this.currentContext.displayName}` : '';
+
+    titleElement.textContent = `JSON Table (${rowCount} rows)${focusIndicator}`;
   }
 }
 

@@ -3,7 +3,7 @@
  */
 class UIUtils {
   static clearPageAndResetStyles() {
-    // Remove all existing content and styles
+    // Remove all existing content
     document.body.innerHTML = '';
 
     // Remove any remaining PRE elements that might still exist
@@ -49,7 +49,7 @@ class UIUtils {
       border: 1px solid var(--button-border);
       border-radius: 8px;
       padding: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     `;
 
     const buttonTable = document.createElement('button');
@@ -148,6 +148,22 @@ class UIUtils {
           color: var(--text-color);
         ">JSON Table (${tableData.length} rows)</div>
         <div class="json2table-controls" style="display: flex; gap: 10px; align-items: center;">
+          <button id="json2table-focus-back" style="
+            padding: 6px 12px;
+            background: var(--button-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            display: none;
+          ">← Back</button>
+          <div id="json2table-breadcrumb" style="
+            display: none;
+            font-size: 14px;
+            color: var(--text-color);
+            margin-left: 10px;
+          "></div>
           <input type="text" id="json2table-search" placeholder="Search..." style="
             padding: 6px 12px;
             border: 1px solid var(--border-color);
@@ -174,7 +190,8 @@ class UIUtils {
             border-radius: 4px;
             cursor: pointer;
             font-size: 14px;
-          ">Collapse All</button>          <button id="json2table-toggle-view" style="
+          ">Collapse All</button>
+          <button id="json2table-toggle-view" style="
             padding: 6px 12px;
             background: #8b5cf6;
             color: white;
@@ -182,7 +199,8 @@ class UIUtils {
             border-radius: 4px;
             cursor: pointer;
             font-size: 14px;
-          ">JSON View</button>          <div id="json2table-export-dropdown" style="position: relative; display: inline-block;">
+          ">JSON View</button>
+          <div id="json2table-export-dropdown" style="position: relative; display: inline-block;">
             <button id="json2table-export" style="
               padding: 6px 12px;
               background: var(--button-active);
@@ -216,6 +234,7 @@ class UIUtils {
 
     // Initialize table viewer
     const tableViewer = new TableViewer(tableData);
+
     // Store table viewer globally for access by message handler
     window.tableViewer = tableViewer;
     tableViewer.render();
@@ -228,30 +247,41 @@ class UIUtils {
           tableViewer.expandAll();
         }, 100);
       }
-    });    // Event listeners
+    });
+
+    // Event listeners
     document.getElementById('json2table-search').oninput = (e) => tableViewer.search(e.target.value);
     document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
     document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
+
+    // Focus navigation event listener
+    document.getElementById('json2table-focus-back').onclick = () => tableViewer.focusBack();
+
     // Use original JSON if available, otherwise fall back to table data
     const jsonForView = originalJson || tableData;
-    document.getElementById('json2table-toggle-view').onclick = () => this.toggleView(jsonForView);      // Export dropdown functionality
+    document.getElementById('json2table-toggle-view').onclick = () => this.toggleView(jsonForView);
+
+    // Export dropdown functionality
     const exportButton = document.getElementById('json2table-export');
 
     // Create dropdown menu and append to body to escape stacking context
     const exportMenu = document.createElement('div');
-    exportMenu.id = 'json2table-export-menu'; exportMenu.style.cssText = `
+    exportMenu.id = 'json2table-export-menu';
+    exportMenu.style.cssText = `
       position: fixed;
       background: var(--bg-color);
       border: 1px solid var(--border-color);
       border-radius: 4px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       z-index: 1000002;
       display: none;
       width: auto;
       min-width: 80px;
       pointer-events: auto;
       overflow: hidden;
-    `; exportMenu.innerHTML = `
+    `;
+
+    exportMenu.innerHTML = `
       <button id="json2table-export-csv" style="
         padding: 8px 16px;
         background: none;
@@ -350,21 +380,17 @@ class UIUtils {
 
     // Export CSV option
     exportCsvBtn.onclick = () => {
-      tableViewer.exportCSV();
       exportMenu.style.display = 'none';
+      tableViewer.exportToCSV();
+      this.showTemporaryMessage('CSV downloaded successfully!', 'success');
     };
 
-    // Export JSON option
+    // Export JSON option  
     exportJsonBtn.onclick = () => {
-      this.exportJSON(jsonForView);
       exportMenu.style.display = 'none';
+      this.exportJSON(jsonForView);
+      this.showTemporaryMessage('JSON downloaded successfully!', 'success');
     };
-
-    // Add hover effects to menu items
-    [exportCsvBtn, exportJsonBtn].forEach(btn => {
-      btn.onmouseenter = () => btn.style.background = 'var(--button-bg)';
-      btn.onmouseleave = () => btn.style.background = 'none';
-    });
   }
 
   // Toggle view functionality for auto-converted interface
@@ -422,7 +448,8 @@ class UIUtils {
           background: var(--bg-color);
           height: 100%;
           overflow: auto;
-        ">          <div style="
+        ">
+          <div style="
             padding: 16px 20px;
             border-bottom: 1px solid var(--border-color);
             background: var(--header-bg);
@@ -461,7 +488,13 @@ class UIUtils {
   }
 
   static formatColumnName(name) {
-    return name.split('.').pop().replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+    // Convert snake_case and camelCase to readable format
+    return name
+      .replace(/([a-z])([A-Z])/g, '$1 $2')  // camelCase to space
+      .replace(/[_-]/g, ' ')                 // snake_case/kebab-case to space  
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 
   static showTemporaryMessage(message, type = 'info') {
@@ -478,7 +511,7 @@ class UIUtils {
       z-index: 1000001;
       transition: all 0.3s ease;
       background: ${type === 'success' ? '#10b981' : type === 'info' ? '#2563eb' : '#f59e0b'};
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     `;
     notification.textContent = message;
     document.body.appendChild(notification);
@@ -490,6 +523,7 @@ class UIUtils {
       setTimeout(() => notification.remove(), 300);
     }, 2000);
   }
+
   static exportJSON(jsonData) {
     try {
       // Handle both original JSON string and parsed JSON data
@@ -524,6 +558,13 @@ class UIUtils {
       this.showTemporaryMessage('Error downloading JSON', 'error');
     }
   }
+}
+
+// Export for use in other modules
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = UIUtils;
+} else {
+  window.UIUtils = UIUtils;
 }
 
 // Export for use in other modules
