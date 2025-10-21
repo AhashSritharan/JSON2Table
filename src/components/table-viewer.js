@@ -396,10 +396,11 @@ class TableViewer {
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
       try {
         const date = new Date(value);
+        const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         if (context === 'array') {
-          return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return formattedDate;
         } else {
-          return `<span class="date-value">${date.toLocaleDateString()}</span>`;
+          return `<span class="date-value">${formattedDate}</span>`;
         }
       } catch (e) {
         // Fall through to regular formatting
@@ -408,8 +409,8 @@ class TableViewer {
 
     // Format booleans
     if (typeof value === 'boolean') {
-      const className = context === 'array' ? (value ? 'true' : 'false') : value.toString();
-      return `<span class="boolean-value ${className}">${value ? '✓' : '✗'}</span>`;
+      const className = value ? 'true' : 'false';
+      return `<span class="boolean-value ${className}">${value}</span>`;
     }
 
     // Format numbers
