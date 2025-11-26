@@ -396,7 +396,12 @@ class TableViewer {
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
       try {
         const date = new Date(value);
-        const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          fractionalSecondDigits: 3
+        });
         if (context === 'array') {
           return formattedDate;
         } else {
