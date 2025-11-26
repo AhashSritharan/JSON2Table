@@ -4,31 +4,57 @@
 <head>
   <meta charset="utf-8">
   <style>
+    :root {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+      --success: #10b981;
+      --error: #ef4444;
+      --radius: 12px;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    }
+
     body {
-      width: 350px;
-      padding: 20px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      width: 380px;
+      padding: 24px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
     }
 
     .header {
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
 
     .logo {
-      font-size: 24px;
-      font-weight: bold;
-      color: #2563eb;
-      margin-bottom: 5px;
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 4px;
+      letter-spacing: -0.5px;
     }
 
     .subtitle {
-      color: #6b7280;
+      color: var(--text-secondary);
       font-size: 14px;
+      font-weight: 500;
     }
 
-    .action-section {
-      margin-bottom: 15px;
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
     }
 
     .btn {
@@ -37,61 +63,75 @@
       border: none;
       border-radius: 8px;
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
-      margin-bottom: 8px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
     }
 
     .btn-primary {
-      background: #2563eb;
+      background: var(--primary);
       color: white;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
     }
 
     .btn-primary:hover {
-      background: #1d4ed8;
+      background: var(--primary-hover);
+      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
     }
 
     .btn-secondary {
-      background: #f3f4f6;
-      color: #374151;
-      border: 1px solid #d1d5db;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
     }
 
     .btn-secondary:hover {
-      background: #e5e7eb;
+      background: #f1f5f9;
+      border-color: #cbd5e1;
     }
 
     .status {
-      padding: 10px;
-      border-radius: 6px;
+      padding: 12px;
+      border-radius: 8px;
       font-size: 13px;
+      font-weight: 500;
       text-align: center;
-      margin-top: 10px;
+      margin-top: 12px;
+      display: none;
+      animation: slideDown 0.2s ease-out;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .status.success {
-      background: #dcfce7;
-      color: #166534;
-      border: 1px solid #bbf7d0;
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
     }
 
     .status.error {
       background: #fef2f2;
-      color: #dc2626;
+      color: #b91c1c;
       border: 1px solid #fecaca;
     }
 
-    .settings-section {
-      margin-top: 20px;
-      padding-top: 15px;
-      border-top: 1px solid #e5e7eb;
-    }
-
-    .settings-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #374151;
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
       margin-bottom: 12px;
     }
 
@@ -99,26 +139,31 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
-      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .setting-item:last-child {
+      margin-bottom: 0;
     }
 
     .setting-label {
-      color: #6b7280;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
     }
 
     .toggle-switch {
       position: relative;
-      width: 40px;
-      height: 20px;
-      background: #e5e7eb;
-      border-radius: 10px;
+      width: 44px;
+      height: 24px;
+      background: #cbd5e1;
+      border-radius: 12px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.3s ease;
     }
 
     .toggle-switch.active {
-      background: #2563eb;
+      background: var(--primary);
     }
 
     .toggle-switch::after {
@@ -126,11 +171,12 @@
       position: absolute;
       top: 2px;
       left: 2px;
-      width: 16px;
-      height: 16px;
+      width: 20px;
+      height: 20px;
       background: white;
       border-radius: 50%;
-      transition: transform 0.2s;
+      transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .toggle-switch.active::after {
@@ -142,105 +188,72 @@
     }
 
     .theme-select {
-      padding: 6px 10px;
-      border: 1px solid #d1d5db;
-      border-radius: 4px;
-      background: white;
-      font-size: 12px;
+      padding: 8px 32px 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      font-size: 13px;
+      color: var(--text);
       cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      background-size: 16px;
     }
 
-    .theme-select:hover {
-      border-color: #9ca3af;
-    }
-
-    /* Manual JSON input styles */
-    .manual-section {
-      margin-bottom: 20px;
-      padding-bottom: 15px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    .section-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #374151;
-      margin-bottom: 12px;
+    .theme-select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
     }
 
     .json-textarea {
       width: 100%;
       min-height: 120px;
       padding: 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
-      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', 'Monaco', monospace;
       font-size: 12px;
       resize: vertical;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
       box-sizing: border-box;
+      background: #f8fafc;
+      transition: all 0.2s;
     }
 
     .json-textarea:focus {
       outline: none;
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-    }
-
-    .json-textarea::placeholder {
-      color: #9ca3af;
-      font-style: italic;
-    }
-
-    .btn-convert {
-      background: #059669;
-      color: white;
-    }
-
-    .btn-convert:hover {
-      background: #047857;
-    }
-
-    .btn-convert:disabled {
-      background: #d1d5db;
-      color: #9ca3af;
-      cursor: not-allowed;
+      border-color: var(--primary);
+      background: white;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
     }
 
     .input-actions {
       display: flex;
       gap: 8px;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
 
     .btn-small {
-      padding: 6px 12px;
+      padding: 8px 12px;
       font-size: 12px;
       flex: 1;
     }
 
-    .btn-paste {
-      background: #6b7280;
+    .btn-convert {
+      background: var(--success);
       color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
     }
 
-    .btn-paste:hover {
-      background: #4b5563;
+    .btn-convert:hover {
+      background: #059669;
     }
 
-    .btn-clear {
-      background: #ef4444;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .btn-clear:hover {
-      background: #dc2626;
+    .btn-convert:disabled {
+      background: #cbd5e1;
+      cursor: not-allowed;
     }
   </style>
 </head>
@@ -248,44 +261,48 @@
 <body>
   <div class="header">
     <div class="logo">JSON2Table</div>
-    <div class="subtitle">Convert JSON to interactive tables</div>
+    <div class="subtitle">Transform JSON into beautiful tables</div>
   </div>
 
-  <div class="manual-section">
-    <div class="section-title">Manual JSON Conversion</div>
-    <textarea id="jsonInput" class="json-textarea" placeholder='Paste your JSON here, for example:
-{
-  "users": [
-    {"name": "John", "age": 30},
-    {"name": "Jane", "age": 25}
-  ]
-}'></textarea>
+  <div class="card">
+    <div class="section-title">Manual Conversion</div>
+    <textarea id="jsonInput" class="json-textarea" placeholder='Paste your JSON here...'></textarea>
     <div class="input-actions">
-      <button id="pasteBtn" class="btn-paste btn-small">📋 Paste</button>
-      <button id="formatBtn" class="btn-paste btn-small">✨ Format</button>
-      <button id="clearBtn" class="btn-clear btn-small">🗑️ Clear</button>
+      <button id="pasteBtn" class="btn btn-secondary btn-small">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        Paste
+      </button>
+      <button id="formatBtn" class="btn btn-secondary btn-small">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/></svg>
+        Format
+      </button>
+      <button id="clearBtn" class="btn btn-secondary btn-small" style="color: var(--error); border-color: #fecaca; background: #fef2f2;">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        Clear
+      </button>
     </div>
     <button id="convertJson" class="btn btn-convert" disabled>
-      Convert JSON to Table
+      Convert to Table
     </button>
   </div>
 
-  <div class="action-section">
+  <div class="card">
     <button id="detectJson" class="btn btn-primary">
-      Detect & Convert JSON from Page
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      Detect & Convert from Page
     </button>
+    <div id="status" class="status"></div>
   </div>
-  <div id="status" class="status" style="display: none;"></div>
 
-  <div class="settings-section">
-    <div class="settings-title">Settings</div>
+  <div class="card">
+    <div class="section-title">Settings</div>
     <div class="setting-item">
       <span class="setting-label">Auto-convert JSON pages</span>
       <div id="autoConvertToggle" class="toggle-switch active"></div>
     </div>
 
     <div class="setting-item">
-      <span class="setting-label">Auto-expand all after conversion</span>
+      <span class="setting-label">Auto-expand all</span>
       <div id="autoExpandToggle" class="toggle-switch active"></div>
     </div>
 
