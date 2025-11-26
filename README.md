@@ -56,11 +56,19 @@ The extension automatically detects JSON content using the same proven method as
 4. **Auto-Conversion**: Seamlessly replaces JSON with interactive table
 
 ### Manual Conversion
-For pages that don't auto-convert, use the extension popup:
+For pages that don't auto-convert, or to paste custom JSON, use the extension popup:
 
+#### Convert JSON from Current Page
 1. Click the extension icon
 2. Click "Detect & Convert JSON" 
-3. View your data in an interactive table format
+3. View your data in an interactive table format (replaces current page)
+
+#### Paste Custom JSON
+1. Click the extension icon
+2. Paste or type JSON in the text area
+3. Click "Convert JSON to Table"
+4. Opens in a new dedicated viewer tab (similar to Tampermonkey's editor approach)
+5. URL format: `chrome-extension://<extension-id>/viewer.html#data=<storage-key>`
 
 ## 🏗️ Architecture
 
@@ -79,9 +87,16 @@ For pages that don't auto-convert, use the extension popup:
 3. **Enhanced Popup Interface** (`popup.html` + `popup.js`)
    - Auto-convert toggle
    - Theme selection (System/Light/Dark)
+   - Manual JSON input with paste functionality
    - Real-time status feedback
 
-4. **Virtual Table Renderer** (`TableViewer`)
+4. **Dedicated Viewer Page** (`viewer.html` + `viewer.js`)
+   - Opens in new tab for manual JSON conversion
+   - Data passed via URL hash and chrome.storage
+   - Similar to Tampermonkey's editor approach
+   - Clean, isolated environment without CSS conflicts
+
+5. **Virtual Table Renderer** (`TableViewer`)
    - High-performance rendering engine
    - Expandable arrays and objects with inline sub-tables
    - Virtual scrolling for datasets of 50,000+ rows

@@ -1278,6 +1278,12 @@ class TableViewer {
 
     this.updateBreadcrumb();
     this.updateFocusedTitle();
+
+    // Refresh JSON view if it's currently active
+    // This ensures the JSON view updates when navigating with back button
+    if (typeof UIUtils !== 'undefined' && UIUtils.refreshJsonView) {
+      UIUtils.refreshJsonView(this.rootData);
+    }
   }
 
   updateBreadcrumb() {

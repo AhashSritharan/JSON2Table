@@ -408,72 +408,7 @@ class UIUtils {
 
     if (!isJsonView) {
       // Switch to JSON view
-      tableContainer.style.display = 'none';
-      jsonContainer.style.display = 'block';
-      toggleButton.textContent = 'Table View';
-
-      // Disable table-specific controls
-      if (searchInput) searchInput.disabled = true;
-      if (expandButton) expandButton.disabled = true;
-      if (collapseButton) collapseButton.disabled = true;
-
-      // Handle both original JSON string and parsed JSON data
-      let formattedJson;
-      let dataLength = 0;
-
-      if (typeof jsonData === 'string') {
-        // Original JSON string - use as is but format it
-        try {
-          const parsed = JSON.parse(jsonData);
-          formattedJson = JSON.stringify(parsed, null, 2);
-          dataLength = Array.isArray(parsed) ? parsed.length : Object.keys(parsed).length;
-        } catch (e) {
-          // If parsing fails, use the string as is
-          formattedJson = jsonData;
-          dataLength = 'N/A';
-        }
-      } else {
-        // Parsed JSON data - stringify it
-        formattedJson = JSON.stringify(jsonData, null, 2);
-        dataLength = Array.isArray(jsonData) ? jsonData.length : Object.keys(jsonData).length;
-      }
-
-      // Render formatted JSON with syntax highlighting
-      jsonContainer.innerHTML = `
-        <div style="
-          padding: 20px;
-          font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-          font-size: 14px;
-          line-height: 1.6;
-          background: var(--bg-color);
-          height: 100%;
-          overflow: auto;
-        ">
-          <div style="
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border-color);
-            background: var(--header-bg);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-radius: 4px 4px 0 0;
-            margin: -20px -20px 20px -20px;
-          ">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-color);">
-              Original JSON Data (${dataLength} items)
-            </h3>
-          </div>
-          <pre style="
-            margin: 0;
-            white-space: pre-wrap;
-            color: var(--text-color);
-            background: var(--bg-color);
-          ">${ThemeManager.syntaxHighlightJson(formattedJson)}</pre>
-        </div>
-      `;
-
-      // Store JSON data for copying
-      window.currentJsonData = formattedJson;
+      this.renderJsonView(jsonData, tableContainer, jsonContainer, toggleButton, searchInput, expandButton, collapseButton);
     } else {
       // Switch to table view
       tableContainer.style.display = 'block';
@@ -484,6 +419,147 @@ class UIUtils {
       if (searchInput) searchInput.disabled = false;
       if (expandButton) expandButton.disabled = false;
       if (collapseButton) collapseButton.disabled = false;
+    }
+  }
+
+  // Refresh JSON view if it's currently active
+  static refreshJsonView(jsonData) {
+    const jsonContainer = document.getElementById('json2table-json-container');
+    if (!jsonContainer || jsonContainer.style.display === 'none') {
+      // JSON view is not active, no need to refresh
+      return;
+    }
+
+    const tableContainer = document.getElementById('json2table-table-container');
+    const toggleButton = document.getElementById('json2table-toggle-view');
+    const searchInput = document.getElementById('json2table-search');
+    const expandButton = document.getElementById('json2table-expand-all');
+    const collapseButton = document.getElementById('json2table-collapse-all');
+
+    // Re-render the JSON view with updated data
+    this.renderJsonView(jsonData, tableContainer, jsonContainer, toggleButton, searchInput, expandButton, collapseButton);
+  }
+
+  // Helper method to render JSON view (extracted from toggleView)
+  static renderJsonView(jsonData, tableContainer, jsonContainer, toggleButton, searchInput, expandButton, collapseButton) {
+    tableContainer.style.display = 'none';
+    jsonContainer.style.display = 'block';
+    toggleButton.textContent = 'Table View';
+
+    // Disable table-specific controls
+    if (searchInput) searchInput.disabled = true;
+    if (expandButton) expandButton.disabled = true;
+    if (collapseButton) collapseButton.disabled = true;
+
+    // Use the current focused data if available, otherwise use the original data
+    let dataToShow = jsonData;
+    let contextInfo = 'Original JSON Data';
+
+    if (window.tableViewer && window.tableViewer.currentData) {
+      // If we're zoomed in (focused), show the focused data instead
+      dataToShow = window.tableViewer.currentData;
+
+      // Update context info based on breadcrumb path
+      if (window.tableViewer.currentContext && window.tableViewer.currentContext.breadcrumbPath &&
+        window.tableViewer.currentContext.breadcrumbPath.length > 0) {
+        contextInfo = 'Focused View: ' + window.tableViewer.currentContext.breadcrumbPath.join(' > ');
+      }
+    }
+
+    // Handle both original JSON string and parsed JSON data
+    let formattedJson;
+    let dataLength = 0;
+
+    if (typeof dataToShow === 'string') {
+      // Original JSON string - use as is but format it
+      try {
+        const parsed = JSON.parse(dataToShow);
+        formattedJson = JSON.stringify(parsed, null, 2);
+        dataLength = Array.isArray(parsed) ? parsed.length : Object.keys(parsed).length;
+      } catch (e) {
+        // If parsing fails, use the string as is
+        formattedJson = dataToShow;
+        dataLength = 'N/A';
+      }
+    } else {
+      // Parsed JSON data - stringify it
+      formattedJson = JSON.stringify(dataToShow, null, 2);
+      dataLength = Array.isArray(dataToShow) ? dataToShow.length : Object.keys(dataToShow).length;
+    }
+
+    // Render formatted JSON with syntax highlighting
+    jsonContainer.innerHTML = `
+      <div style="
+        padding: 20px;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 14px;
+        line-height: 1.6;
+        background: var(--bg-color);
+        height: 100%;
+        overflow: auto;
+      ">
+        <div style="
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--border-color);
+          background: var(--header-bg);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-radius: 4px 4px 0 0;
+          margin: -20px -20px 20px -20px;
+        ">
+          <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-color);">
+            ${contextInfo} (${dataLength} items)
+          </h3>
+          <button id="json2table-select-all" style="
+            padding: 6px 12px;
+            background: var(--button-active);
+            color: white;
+            border: 1px solid var(--button-active);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+          ">Select All</button>
+        </div>
+        <pre id="json2table-json-content" style="
+          margin: 0;
+          white-space: pre-wrap;
+          color: var(--text-color);
+          background: var(--bg-color);
+        ">${ThemeManager.syntaxHighlightJson(formattedJson)}</pre>
+      </div>
+    `;
+
+    // Store JSON data for copying
+    window.currentJsonData = formattedJson;
+
+    // Add select all functionality
+    const selectAllBtn = document.getElementById('json2table-select-all');
+    const jsonContent = document.getElementById('json2table-json-content');
+
+    if (selectAllBtn && jsonContent) {
+      selectAllBtn.onclick = () => {
+        // Create a range and select the content
+        const range = document.createRange();
+        range.selectNodeContents(jsonContent);
+
+        // Clear any existing selections
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        // Show feedback
+        this.showTemporaryMessage('JSON text selected! Press Ctrl+C to copy', 'success');
+
+        // Optional: Change button text temporarily
+        const originalText = selectAllBtn.textContent;
+        selectAllBtn.textContent = 'Selected ✓';
+        setTimeout(() => {
+          selectAllBtn.textContent = originalText;
+        }, 2000);
+      };
     }
   }
 
@@ -526,21 +602,29 @@ class UIUtils {
 
   static exportJSON(jsonData) {
     try {
+      // Use the current focused data if available, otherwise use the original data
+      let dataToExport = jsonData;
+
+      if (window.tableViewer && window.tableViewer.currentData) {
+        // If we're zoomed in (focused), export the focused data instead
+        dataToExport = window.tableViewer.currentData;
+      }
+
       // Handle both original JSON string and parsed JSON data
       let formattedJson;
 
-      if (typeof jsonData === 'string') {
+      if (typeof dataToExport === 'string') {
         // Original JSON string - use as is but format it
         try {
-          const parsed = JSON.parse(jsonData);
+          const parsed = JSON.parse(dataToExport);
           formattedJson = JSON.stringify(parsed, null, 2);
         } catch (e) {
           // If parsing fails, use the string as is
-          formattedJson = jsonData;
+          formattedJson = dataToExport;
         }
       } else {
         // Parsed JSON data - stringify it
-        formattedJson = JSON.stringify(jsonData, null, 2);
+        formattedJson = JSON.stringify(dataToExport, null, 2);
       }
 
       // Create and download the JSON file
@@ -549,7 +633,17 @@ class UIUtils {
 
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'json-table-export.json';
+
+      // Use focused context in filename if available
+      let filename = 'json-table-export.json';
+      if (window.tableViewer && window.tableViewer.currentContext &&
+        window.tableViewer.currentContext.breadcrumbPath &&
+        window.tableViewer.currentContext.breadcrumbPath.length > 0) {
+        const focusPath = window.tableViewer.currentContext.breadcrumbPath.join('-').toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        filename = `json-export-${focusPath}.json`;
+      }
+
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
 

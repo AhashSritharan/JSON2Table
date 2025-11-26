@@ -60,9 +60,24 @@ class JSONDetector {
   }
 
   static extractTableData(jsonData) {
-    // If it's directly an array, use it
+    // If it's directly an array of objects, use it
     if (Array.isArray(jsonData)) {
-      return jsonData;
+      // Check if it's an array of objects
+      if (jsonData.length > 0 && typeof jsonData[0] === 'object' && jsonData[0] !== null && !Array.isArray(jsonData[0])) {
+        return jsonData;
+      }
+
+      // Handle array of primitive values (strings, numbers, booleans)
+      // Convert to array of objects with an "index" and "value" property
+      if (jsonData.length > 0) {
+        return jsonData.map((item, index) => ({
+          index: index,
+          value: item
+        }));
+      }
+
+      // Empty array
+      return [];
     }
 
     // If it's a single object, convert it to property-value format

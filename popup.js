@@ -240,37 +240,24 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      // Generate a unique key for storing the data temporarily
+      const dataKey = 'json2table_data_' + Date.now();
 
-      // Check if we're on a restricted URL where content scripts can't run
-      if (isRestrictedUrl(tab.url)) {
-        showStatus(getRestrictedUrlMessage(tab.url), 'error');
-        return;
-      }
+      // Store the JSON data in chrome.storage
+      await chrome.storage.local.set({ [dataKey]: validation.data });
 
-      console.log('Sending convertManualJson message with data:', validation.data);
+      // Open the viewer page in a new tab with the data key in the hash
+      const viewerUrl = chrome.runtime.getURL('viewer.html') + '#data=' + dataKey;
+      await chrome.tabs.create({ url: viewerUrl });
 
-      // Send the parsed JSON data to content script
-      const result = await chrome.tabs.sendMessage(tab.id, {
-        action: 'convertManualJson',
-        jsonData: validation.data,
-        jsonText: jsonText
-      });
+      showStatus('JSON converted to table successfully!', 'success');
+      jsonInput.value = ''; // Clear the input
+      convertBtn.disabled = true;
 
-      console.log('Received response:', result);
-
-      if (result.success) {
-        showStatus('JSON converted to table successfully!', 'success');
-        jsonInput.value = ''; // Clear the input
-        convertBtn.disabled = true;
-        window.close();
-      } else {
-        showStatus(result.error || 'Failed to convert JSON', 'error');
-        console.error('Conversion failed:', result.error);
-      }
+      // Close popup after a short delay
+      setTimeout(() => window.close(), 500);
     } catch (error) {
-      // This catch block now handles genuine errors, not just restricted URLs
-      showStatus('Unable to connect to page - please try refreshing and try again', 'error');
+      showStatus('Failed to convert JSON: ' + error.message, 'error');
       console.error('Conversion error:', error);
     }
   });// Detect and convert JSON on current page
