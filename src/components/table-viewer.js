@@ -845,11 +845,11 @@ class TableViewer {
     this.modalOverlay = document.createElement('div');
     this.modalOverlay.className = 'json2table-value-modal';
     this.modalOverlay.innerHTML = `
-      <div class="modal-backdrop" onclick="this.parentElement.remove()">
-        <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-backdrop">
+        <div class="modal-content">
           <div class="modal-header">
             <h3>${title}</h3>
-            <button class="modal-close" onclick="this.closest('.json2table-value-modal').remove()">×</button>
+            <button class="modal-close">×</button>
           </div>
           <div class="modal-body">
             ${this.renderValueContent(value)}
@@ -859,6 +859,23 @@ class TableViewer {
     `;
 
     document.body.appendChild(this.modalOverlay);
+
+    // Add event listeners for modal interactions
+    const backdrop = this.modalOverlay.querySelector('.modal-backdrop');
+    const modalContent = this.modalOverlay.querySelector('.modal-content');
+    const closeBtn = this.modalOverlay.querySelector('.modal-close');
+
+    if (backdrop) {
+      backdrop.addEventListener('click', () => this.modalOverlay.remove());
+    }
+
+    if (modalContent) {
+      modalContent.addEventListener('click', (event) => event.stopPropagation());
+    }
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.modalOverlay.remove());
+    }
   }
 
   renderValueContent(value) {

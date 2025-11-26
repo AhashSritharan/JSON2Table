@@ -16,11 +16,16 @@
         <div class="error-title">${title}</div>
         <div class="error-message">${message}</div>
         <div class="error-actions">
-          <button class="btn btn-primary" onclick="window.close()">Close Tab</button>
-          <button class="btn btn-secondary" onclick="history.back()">Go Back</button>
+          <button class="btn btn-primary" id="error-close-btn">Close Tab</button>
         </div>
       </div>
     `;
+
+        // Add event listener for close button
+        const closeBtn = document.getElementById('error-close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => window.close());
+        }
     }
 
     /**
@@ -38,12 +43,12 @@
                 const result = await chrome.storage.local.get([dataKey]);
 
                 if (!result[dataKey]) {
-                    throw new Error('Data not found. It may have expired or been cleared.');
+                    throw new Error('Data not found. The data was already loaded and cleared, or it expired. Please convert the JSON again from the extension popup.');
                 }
 
                 jsonData = result[dataKey];
 
-                // Clean up the stored data after loading (optional - keeps storage clean)
+                // Clean up the stored data after loading (keeps storage clean)
                 chrome.storage.local.remove([dataKey]);
             } else {
                 throw new Error('No data provided. Please use the extension to view JSON data.');
@@ -73,7 +78,11 @@
             UIUtils.createTableInterface(container, tableData, originalJsonData);
 
         } catch (error) {
-            console.error('Error loading JSON data:', error);
+            // Only log unexpected errors to console
+            // Don't log "Data not found" errors as they're expected on refresh
+            if (!error.message.includes('Data not found')) {
+                console.error('Error loading JSON data:', error);
+            }
             showError('Failed to Load Data', error.message);
         }
     }

@@ -108,6 +108,34 @@ document.addEventListener('DOMContentLoaded', function () {
       statusDiv.style.display = 'none';
     }, 3000);
   }
+  // Clean up stale temporary data from storage
+  async function cleanupStaleData() {
+    try {
+      const allData = await chrome.storage.local.get(null);
+      const now = Date.now();
+      const fiveMinutesAgo = now - (5 * 60 * 1000); // 5 minutes in milliseconds
+      const keysToRemove = [];
+
+      // Find all temporary data keys that are older than 5 minutes
+      for (const key in allData) {
+        if (key.startsWith('json2table_data_')) {
+          const timestamp = parseInt(key.replace('json2table_data_', ''), 10);
+          if (!isNaN(timestamp) && timestamp < fiveMinutesAgo) {
+            keysToRemove.push(key);
+          }
+        }
+      }
+
+      // Remove stale data
+      if (keysToRemove.length > 0) {
+        await chrome.storage.local.remove(keysToRemove);
+        console.log(`Cleaned up ${keysToRemove.length} stale data entries`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up stale data:', error);
+    }
+  }
+
   // Load settings from storage
   function loadSettings() {
     chrome.storage.local.get(['autoConvert', 'autoExpand', 'themeOverride', 'csvDelimiter'], (result) => {
@@ -134,6 +162,9 @@ document.addEventListener('DOMContentLoaded', function () {
         chrome.storage.local.set({ csvDelimiter: defaultDelimiter });
       }
     });
+
+    // Clean up stale data on popup open
+    cleanupStaleData();
   }
 
   // Function to determine the likely CSV delimiter based on locale
