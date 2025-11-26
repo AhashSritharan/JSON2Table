@@ -455,16 +455,14 @@ class UIUtils {
     let dataToShow = jsonData;
     let contextInfo = 'Original JSON Data';
 
-    if (window.tableViewer && window.tableViewer.currentData) {
+    if (window.tableViewer && window.tableViewer.currentContext &&
+      window.tableViewer.currentContext.breadcrumbPath &&
+      window.tableViewer.currentContext.breadcrumbPath.length > 0) {
       // If we're zoomed in (focused), show the focused data instead
       dataToShow = window.tableViewer.currentData;
-
-      // Update context info based on breadcrumb path
-      if (window.tableViewer.currentContext && window.tableViewer.currentContext.breadcrumbPath &&
-        window.tableViewer.currentContext.breadcrumbPath.length > 0) {
-        contextInfo = 'Focused View: ' + window.tableViewer.currentContext.breadcrumbPath.join(' > ');
-      }
+      contextInfo = 'Focused View: ' + window.tableViewer.currentContext.breadcrumbPath.join(' > ');
     }
+    // Otherwise, use the original jsonData passed to this function (not the transformed table data)
 
     // Handle both original JSON string and parsed JSON data
     let formattedJson;
@@ -605,10 +603,13 @@ class UIUtils {
       // Use the current focused data if available, otherwise use the original data
       let dataToExport = jsonData;
 
-      if (window.tableViewer && window.tableViewer.currentData) {
+      if (window.tableViewer && window.tableViewer.currentContext &&
+        window.tableViewer.currentContext.breadcrumbPath &&
+        window.tableViewer.currentContext.breadcrumbPath.length > 0) {
         // If we're zoomed in (focused), export the focused data instead
         dataToExport = window.tableViewer.currentData;
       }
+      // Otherwise, use the original jsonData passed to this function (not the transformed table data)
 
       // Handle both original JSON string and parsed JSON data
       let formattedJson;

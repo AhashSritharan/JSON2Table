@@ -14,7 +14,7 @@
   let autoConvertEnabled = false;
 
   // Function to show table viewer - completely replaces page content
-  function showTableViewer(tableData) {
+  function showTableViewer(tableData, originalJson = null) {
     // Check if we're already displaying a table (avoid clearing if just updating)
     const existingContainer = document.getElementById('json2tableContainer');
 
@@ -57,8 +57,8 @@
     // Clear existing content and create viewer
     container.innerHTML = '';
 
-    // Use the same interface creation method
-    UIUtils.createTableInterface(container, tableData);
+    // Use the same interface creation method, passing original JSON if available
+    UIUtils.createTableInterface(container, tableData, originalJson);
   }
 
   // Auto-conversion initialization

@@ -52,6 +52,9 @@
             // Apply theme before rendering
             ThemeManager.applyTheme();
 
+            // Preserve the original JSON data before transformation
+            const originalJsonData = jsonData;
+
             // Extract table data from JSON
             const tableData = JSONDetector.extractTableData(jsonData);
 
@@ -65,8 +68,9 @@
             }
 
             // Clear loading state and create the table interface
+            // Pass the original JSON data so it can be shown in JSON view
             container.innerHTML = '';
-            UIUtils.createTableInterface(container, tableData);
+            UIUtils.createTableInterface(container, tableData, originalJsonData);
 
         } catch (error) {
             console.error('Error loading JSON data:', error);
