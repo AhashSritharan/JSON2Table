@@ -55,7 +55,7 @@
             }
 
             // Apply theme before rendering
-            ThemeManager.applyTheme();
+            await ThemeManager.applyTheme();
 
             // Preserve the original JSON data before transformation
             const originalJsonData = jsonData;

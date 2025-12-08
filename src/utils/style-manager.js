@@ -10,37 +10,6 @@ class StyleManager {
 
   static getTableStyles() {
     return `
-      :root {
-        --primary: #6366f1;
-        --primary-light: #e0e7ff;
-        --bg: #ffffff;
-        --header-bg: #f8fafc;
-        --border: #e2e8f0;
-        --text: #1e293b;
-        --text-secondary: #64748b;
-        --hover-bg: #f1f5f9;
-        --array-badge: #0ea5e9;
-        --object-badge: #8b5cf6;
-        --null-color: #94a3b8;
-        --bool-true: #10b981;
-        --bool-false: #ef4444;
-        --string-color: #334155;
-        --number-color: #f59e0b;
-        --date-color: #ec4899;
-      }
-
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #0f172a;
-          --header-bg: #1e293b;
-          --border: #334155;
-          --text: #f1f5f9;
-          --text-secondary: #94a3b8;
-          --hover-bg: #1e293b;
-          --primary-light: #312e81;
-        }
-      }
-
       .json2table-table {
         width: 100%;
         border-collapse: separate;
