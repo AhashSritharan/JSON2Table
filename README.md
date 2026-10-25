@@ -47,12 +47,24 @@ requests of its own (image thumbnails are loaded from the URLs in your JSON).
 
 ## Install
 
-From source:
+### [➜ Get it from the Chrome Web Store](https://chromewebstore.google.com/detail/json2table/ipfeofhefkpebgnpnckolmmhnmkpeacf)
+
+- **Chrome:** open the store page and click **Add to Chrome**.
+- **Microsoft Edge:** open the same page, click **Allow extensions from other
+  stores** in the banner at the top, then **Get** (labelled **Add to Chrome**
+  on some versions).
+
+Updates install automatically.
+
+<details>
+<summary>Install from source instead</summary>
 
 1. Clone this repository.
 2. Open `chrome://extensions` (or `edge://extensions`) and turn on
    **Developer mode**.
 3. Click **Load unpacked** and select the repository folder.
+
+</details>
 
 ## How it works
 
