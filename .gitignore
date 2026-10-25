@@ -1,0 +1,24 @@
+# Chrome pack artifacts (the .pem is a private signing key — never commit)
+*.crx
+*.pem
+
+# Release bundle
+json2table-extension.zip
+
+# Browser snapshots from the Playwright MCP
+.playwright-mcp/
+
+# Local denylist for scripts/sensitive-scan.mjs — it lists the very strings
+# that must not be committed, so it must not be committed either
+.sensitive-denylist
+
+# Dev dependencies (Playwright for the browser tests)
+node_modules/
+
+# Browser test output
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# Chrome Web Store images, regenerated with: npm run store-images
+/store-images/

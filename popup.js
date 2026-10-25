@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const autoExpandToggle = document.getElementById('autoExpandToggle');
   const themeSelect = document.getElementById('themeSelect');
   const csvDelimiterSelect = document.getElementById('csvDelimiterSelect');
+  const densitySelect = document.getElementById('densitySelect');
 
   // Load saved settings
   loadSettings();
@@ -60,7 +61,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Validate JSON format
   function validateJSON(jsonString) {
     try {
-      const parsed = JSON.parse(jsonString);
+      const parsed = JSONDetector.parse(jsonString);
       return { valid: true, data: parsed };
     } catch (error) {
       return { valid: false, error: error.message };
@@ -138,7 +139,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Load settings from storage
   function loadSettings() {
-    chrome.storage.local.get(['autoConvert', 'autoExpand', 'themeOverride', 'csvDelimiter'], (result) => {
+    chrome.storage.local.get(['autoConvert', 'autoExpand', 'themeOverride', 'csvDelimiter', 'density'], (result) => {
       // Auto-convert toggle (default to true)
       const autoConvert = result.autoConvert !== false;
       autoConvertToggle.classList.toggle('active', autoConvert);
@@ -150,6 +151,10 @@ document.addEventListener('DOMContentLoaded', function () {
       // Theme selection (default to system)
       const theme = result.themeOverride || 'system';
       themeSelect.value = theme;
+      applyPopupTheme(theme);
+
+      // Row density (default to comfortable)
+      densitySelect.value = result.density || 'comfortable';
 
       // CSV delimiter selection (detect default if not set)
       if (result.csvDelimiter) {
@@ -165,6 +170,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Clean up stale data on popup open
     cleanupStaleData();
+  }
+
+  // Apply the Theme setting to the popup itself. 'system' leaves the attribute
+  // off so the prefers-color-scheme block decides, which also lets Chrome pick
+  // a matching base colour for the popup surface.
+  function applyPopupTheme(themeOverride) {
+    const root = document.documentElement;
+    if (themeOverride === 'force_light') {
+      root.dataset.theme = 'light';
+    } else if (themeOverride === 'force_dark') {
+      root.dataset.theme = 'dark';
+    } else {
+      delete root.dataset.theme;
+    }
   }
 
   // Function to determine the likely CSV delimiter based on locale
@@ -207,12 +226,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const autoExpand = autoExpandToggle.classList.contains('active');
     const theme = themeSelect.value;
     const csvDelimiter = csvDelimiterSelect.value;
+    const density = densitySelect.value;
 
     chrome.storage.local.set({
       autoConvert: autoConvert,
       autoExpand: autoExpand,
       themeOverride: theme,
-      csvDelimiter: csvDelimiter
+      csvDelimiter: csvDelimiter,
+      density: density
     }, () => {
       showStatus('Settings saved', 'success');
 
@@ -224,7 +245,8 @@ document.addEventListener('DOMContentLoaded', function () {
             autoConvert: autoConvert,
             autoExpand: autoExpand,
             themeOverride: theme,
-            csvDelimiter: csvDelimiter
+            csvDelimiter: csvDelimiter,
+            density: density
           }).catch(() => {
             // Ignore errors if content script not loaded
           });
@@ -246,11 +268,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Theme selection handler
   themeSelect.addEventListener('change', function () {
+    applyPopupTheme(this.value);
     saveSettings();
   });
 
   // CSV delimiter selection handler
   csvDelimiterSelect.addEventListener('change', function () {
+    saveSettings();
+  });
+
+  // Row density selection handler
+  densitySelect.addEventListener('change', function () {
     saveSettings();
   });
 
@@ -274,8 +302,10 @@ document.addEventListener('DOMContentLoaded', function () {
       // Generate a unique key for storing the data temporarily
       const dataKey = 'json2table_data_' + Date.now();
 
-      // Store the JSON data in chrome.storage
-      await chrome.storage.local.set({ [dataKey]: validation.data });
+      // Store the raw JSON text, not the parsed object: chrome.storage
+      // serializes objects with their keys sorted, which would lose the
+      // original property order.
+      await chrome.storage.local.set({ [dataKey]: jsonText });
 
       // Open the viewer page in a new tab with the data key in the hash
       const viewerUrl = chrome.runtime.getURL('viewer.html') + '#data=' + dataKey;

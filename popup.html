@@ -4,23 +4,137 @@
 <head>
   <meta charset="utf-8">
   <style>
+    /* Light palette. Dark overrides only redefine tokens, below. The Theme
+       setting (system / force_light / force_dark) is applied by popup.js as
+       data-theme on <html>, matching ThemeManager's model for the viewer. */
     :root {
       --primary: #6366f1;
       --primary-hover: #4f46e5;
       --bg: #f8fafc;
       --surface: #ffffff;
+      --surface-hover: #f1f5f9;
       --text: #1e293b;
       --text-secondary: #64748b;
       --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --input-bg: #f8fafc;
+      --input-bg-focus: #ffffff;
+      --toggle-off: #cbd5e1;
+      --disabled-bg: #cbd5e1;
       --success: #10b981;
+      --success-hover: #059669;
+      --success-bg: #ecfdf5;
+      --success-text: #047857;
+      --success-border: #a7f3d0;
       --error: #ef4444;
+      --error-bg: #fef2f2;
+      --error-text: #b91c1c;
+      --error-border: #fecaca;
+      /* var() does not substitute inside a url() string, so the whole url()
+         is the token. Stroke colour is the only difference between themes. */
+      --chevron-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
       --radius: 12px;
       --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      color-scheme: light dark;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --primary-hover: #818cf8;
+        --bg: #0f172a;
+        --surface: #1e293b;
+        --surface-hover: #334155;
+        --text: #e2e8f0;
+        --text-secondary: #94a3b8;
+        --border: #334155;
+        --border-strong: #475569;
+        --input-bg: #0f172a;
+        --input-bg-focus: #1e293b;
+        --toggle-off: #475569;
+        --disabled-bg: #334155;
+        --success-bg: #064e3b;
+        --success-text: #6ee7b7;
+        --success-border: #065f46;
+        --error-bg: #450a0a;
+        --error-text: #fca5a5;
+        --error-border: #7f1d1d;
+        --chevron-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+        --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+      }
+    }
+
+    /* An explicit Theme choice wins over the media query in both directions. */
+    :root[data-theme="dark"] {
+      --primary-hover: #818cf8;
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-hover: #334155;
+      --text: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --border: #334155;
+      --border-strong: #475569;
+      --input-bg: #0f172a;
+      --input-bg-focus: #1e293b;
+      --toggle-off: #475569;
+      --disabled-bg: #334155;
+      --success-bg: #064e3b;
+      --success-text: #6ee7b7;
+      --success-border: #065f46;
+      --error-bg: #450a0a;
+      --error-text: #fca5a5;
+      --error-border: #7f1d1d;
+      --chevron-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+      color-scheme: dark;
+    }
+
+    :root[data-theme="light"] {
+      color-scheme: light;
+    }
+
+    /* Chrome sizes the popup window by shrink-to-fitting the document from an
+       initial 800px-wide viewport. Leaving <html> unconstrained lets that
+       measurement land wide (content pinned left, dead space right) on displays
+       with >100% scaling. Pinning the width removes the guesswork.
+       overflow-x is clip, not hidden: hidden would make overflow-y compute to
+       auto and Chrome would reserve scrollbar width. clip is exempt from that
+       rule, so vertical scrolling stays visible/available while sub-pixel
+       horizontal overflow (window rounding at non-100% zoom) can never raise a
+       horizontal scrollbar -- which used to steal height and trigger the
+       vertical one in turn.
+       color-scheme tells Chrome which base color to paint the popup surface
+       with, so its own chrome matches instead of falling back to near-black. */
+    html {
+      width: 412px;
+      overflow-x: clip;
+      background: var(--bg);
+    }
+
+    /* Popup scrollbars otherwise render in the browser theme's colours, which
+       reads as a black frame around the popup. Keep them subtle instead of
+       relying on them never appearing. */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-secondary);
     }
 
     body {
       width: 380px;
-      padding: 24px;
+      padding: 16px;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
@@ -29,11 +143,11 @@
 
     .header {
       text-align: center;
-      margin-bottom: 24px;
+      margin-bottom: 12px;
     }
 
     .logo {
-      font-size: 28px;
+      font-size: 24px;
       font-weight: 800;
       background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
       -webkit-background-clip: text;
@@ -44,22 +158,22 @@
 
     .subtitle {
       color: var(--text-secondary);
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
     }
 
     .card {
       background: var(--surface);
       border-radius: var(--radius);
-      padding: 16px;
+      padding: 14px;
       box-shadow: var(--shadow);
-      margin-bottom: 16px;
+      margin-bottom: 10px;
       border: 1px solid var(--border);
     }
 
     .btn {
       width: 100%;
-      padding: 12px;
+      padding: 11px;
       border: none;
       border-radius: 8px;
       font-size: 14px;
@@ -94,8 +208,8 @@
     }
 
     .btn-secondary:hover {
-      background: #f1f5f9;
-      border-color: #cbd5e1;
+      background: var(--surface-hover);
+      border-color: var(--border-strong);
     }
 
     .status {
@@ -115,15 +229,15 @@
     }
 
     .status.success {
-      background: #ecfdf5;
-      color: #047857;
-      border: 1px solid #a7f3d0;
+      background: var(--success-bg);
+      color: var(--success-text);
+      border: 1px solid var(--success-border);
     }
 
     .status.error {
-      background: #fef2f2;
-      color: #b91c1c;
-      border: 1px solid #fecaca;
+      background: var(--error-bg);
+      color: var(--error-text);
+      border: 1px solid var(--error-border);
     }
 
     .section-title {
@@ -135,11 +249,55 @@
       margin-bottom: 12px;
     }
 
+    /* Settings is a <details> so the popup opens compact; Chrome caps popups at
+       600px tall and starts scrolling (and mis-sizing) past that. */
+    .settings-card {
+      padding: 0;
+      margin-bottom: 0;
+    }
+
+    .settings-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+      border-radius: var(--radius);
+    }
+
+    .settings-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .settings-summary:hover {
+      background: var(--surface-hover);
+    }
+
+    .settings-summary .chevron {
+      color: var(--text-secondary);
+      transition: transform 0.2s ease;
+    }
+
+    .settings-card[open] .settings-summary {
+      border-bottom: 1px solid var(--border);
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+
+    .settings-card[open] .settings-summary .chevron {
+      transform: rotate(180deg);
+    }
+
+    .settings-body {
+      padding: 12px 14px;
+    }
+
     .setting-item {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 16px;
+      margin-bottom: 8px;
     }
 
     .setting-item:last-child {
@@ -156,7 +314,7 @@
       position: relative;
       width: 44px;
       height: 24px;
-      background: #cbd5e1;
+      background: var(--toggle-off);
       border-radius: 12px;
       cursor: pointer;
       transition: background 0.3s ease;
@@ -187,8 +345,12 @@
       position: relative;
     }
 
+    .settings-summary .section-title {
+      margin-bottom: 0;
+    }
+
     .theme-select {
-      padding: 8px 32px 8px 12px;
+      padding: 6px 30px 6px 10px;
       border: 1px solid var(--border);
       border-radius: 6px;
       background: var(--surface);
@@ -196,7 +358,7 @@
       color: var(--text);
       cursor: pointer;
       appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+      background-image: var(--chevron-url);
       background-repeat: no-repeat;
       background-position: right 8px center;
       background-size: 16px;
@@ -210,34 +372,39 @@
 
     .json-textarea {
       width: 100%;
-      min-height: 120px;
-      padding: 12px;
+      min-height: 88px;
+      padding: 10px;
       border: 1px solid var(--border);
       border-radius: 8px;
       font-family: 'JetBrains Mono', 'Monaco', monospace;
       font-size: 12px;
       resize: vertical;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       box-sizing: border-box;
-      background: #f8fafc;
+      background: var(--input-bg);
+      color: var(--text);
       transition: all 0.2s;
+    }
+
+    .json-textarea::placeholder {
+      color: var(--text-secondary);
     }
 
     .json-textarea:focus {
       outline: none;
       border-color: var(--primary);
-      background: white;
+      background: var(--input-bg-focus);
       box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
     }
 
     .input-actions {
       display: flex;
       gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .btn-small {
-      padding: 8px 12px;
+      padding: 7px 10px;
       font-size: 12px;
       flex: 1;
     }
@@ -248,12 +415,24 @@
     }
 
     .btn-convert:hover {
-      background: #059669;
+      background: var(--success-hover);
     }
 
     .btn-convert:disabled {
-      background: #cbd5e1;
+      background: var(--disabled-bg);
       cursor: not-allowed;
+    }
+
+    /* Was an inline style on the button; tokenised so dark mode can reach it. */
+    .btn-clear {
+      color: var(--error);
+      background: var(--error-bg);
+      border-color: var(--error-border);
+    }
+
+    .btn-clear:hover {
+      background: var(--error-bg);
+      border-color: var(--error);
     }
   </style>
 </head>
@@ -276,7 +455,7 @@
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/></svg>
         Format
       </button>
-      <button id="clearBtn" class="btn btn-secondary btn-small" style="color: var(--error); border-color: #fecaca; background: #fef2f2;">
+      <button id="clearBtn" class="btn btn-secondary btn-small btn-clear">
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
         Clear
       </button>
@@ -294,8 +473,12 @@
     <div id="status" class="status"></div>
   </div>
 
-  <div class="card">
-    <div class="section-title">Settings</div>
+  <details class="card settings-card">
+    <summary class="settings-summary">
+      <span class="section-title">Settings</span>
+      <svg class="chevron" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </summary>
+    <div class="settings-body">
     <div class="setting-item">
       <span class="setting-label">Auto-convert JSON pages</span>
       <div id="autoConvertToggle" class="toggle-switch active"></div>
@@ -304,6 +487,16 @@
     <div class="setting-item">
       <span class="setting-label">Auto-expand all</span>
       <div id="autoExpandToggle" class="toggle-switch active"></div>
+    </div>
+
+    <div class="setting-item">
+      <span class="setting-label">Row density</span>
+      <div class="select-wrapper">
+        <select id="densitySelect" class="theme-select">
+          <option value="comfortable">Comfortable</option>
+          <option value="compact">Compact</option>
+        </select>
+      </div>
     </div>
 
     <div class="setting-item">
@@ -326,7 +519,9 @@
         </select>
       </div>
     </div>
-  </div>
+    </div>
+  </details>
+  <script src="src/utils/json-detector.js"></script>
   <script src="popup.js"></script>
 </body>
 

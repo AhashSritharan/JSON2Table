@@ -9,6 +9,12 @@ class AutoJSONDetector {
       if (!settings.autoConvert) {
         return { converted: false, note: 'Auto-convert disabled' };
       }
+      // Unasked, only take over pages that are JSON documents. The popup's
+      // "Detect & Convert" is an explicit request and may convert JSON shown
+      // inside an ordinary page.
+      if (!JSONDetector.looksLikeJsonDocument(document)) {
+        return { converted: false, note: 'Not a JSON document' };
+      }
     }
 
     // Look for body>pre element (json-formatter approach)
@@ -43,7 +49,7 @@ class AutoJSONDetector {
     // Try to parse as JSON
     let parsedJsonValue;
     try {
-      parsedJsonValue = JSON.parse(rawPreContent);
+      parsedJsonValue = JSONDetector.parse(rawPreContent);
     } catch (e) {
       return { converted: false, note: 'Does not parse as JSON' };
     }
@@ -55,19 +61,11 @@ class AutoJSONDetector {
     // Check if it's suitable for table conversion
     const tableData = JSONDetector.extractTableData(parsedJsonValue);
 
-    if (!tableData || !Array.isArray(tableData) || tableData.length === 0) {
+    if (tableData.length === 0) {
       return { converted: false, note: 'No suitable table data found' };
     }
 
-    // Verify the table data contains objects
-    if (!tableData.some(item => item && typeof item === 'object' && !Array.isArray(item))) {
-      return { converted: false, note: 'Table data must contain objects' };
-    }
-
-    // Store ONLY the text content before clearing everything
-    const originalTextContent = originalPreElement.textContent;
-
-    originalPreElement.remove(); // Remove the original PRE element
+    originalPreElement.remove();
 
     // Create containers with clean structure
     const tableContainer = document.createElement('div');
@@ -85,11 +83,18 @@ class AutoJSONDetector {
     `;
     document.body.appendChild(tableContainer);
 
-    // Apply theme
-    ThemeManager.applyTheme();
+    // The table takes over the page: whatever else the body holds (the rest of
+    // an HTML page, or the browser's own JSON viewer controls) is hidden, and
+    // the body's default margin goes so the table starts at the very top.
+    for (const child of document.body.children) {
+      if (child !== tableContainer) child.style.setProperty('display', 'none', 'important');
+    }
+    document.body.style.margin = '0';
 
-    // Create table viewer with original JSON text
-    UIUtils.createTableInterface(tableContainer, tableData, originalTextContent);
+    // Apply theme first so the table never paints against undefined variables
+    await ThemeManager.applyTheme();
+
+    UIUtils.createTableInterface(tableContainer, tableData, parsedJsonValue);
 
     return { converted: true, note: 'Converted to table', rawLength };
   }

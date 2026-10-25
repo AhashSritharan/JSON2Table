@@ -1,283 +1,96 @@
-# JSON2Table Chrome Extension
+# JSON2Table
 
-A high-performance Chrome extension that automatically converts JSON data into interactive, searchable tables with expandable arrays and objects.
+A Chrome/Edge extension that turns JSON into an interactive table you can
+search, sort, expand and export.
 
-## 🚀 Key Features
+## Features
 
-### 🔄 Automatic JSON Detection
-- **Auto-Convert Mode**: Automatically detects and converts JSON pages on load
-- **Smart Detection**: Uses json-formatter's proven detection algorithm
-- **Performance Limits**: Handles files up to 3MB with content validation
-- **Seamless Integration**: Works with API responses, JSON files, and raw JSON pages
+**Opening JSON**
+- **Automatic:** JSON documents (API responses, `.json` files) open as a table.
+  This covers JSON and text content types, and HTML pages whose body is nothing
+  but the JSON. Ordinary web pages are never taken over.
+- **Detect & Convert** in the popup converts the current page on request, even
+  with auto-convert off or when the JSON sits in a `<pre>` inside a normal page.
+- **Paste JSON** in the popup to open it in a viewer tab.
 
-### 🎨 Dark/Light Mode Support
-- **System Theme**: Automatically follows system theme preference
-- **Manual Override**: Force light or dark mode in extension settings
-- **Consistent Styling**: Theme-aware colors for optimal readability
-- **CSS Variables**: Modern theming architecture for smooth transitions
+**The table**
+- An array of records gets a column per field. Anything else (one object, a
+  list of values) is shown as property/value rows that read as a tree.
+- **Expand nested values:** in record tables, objects and arrays expand inside
+  their own cell. Uniform arrays become a small sub-table, which you can switch
+  to a list. Long lists show 100 items at a time. **Expand all / Collapse all**
+  does everything at once; *Auto-expand* in the settings does it on load.
+- **Focus** (magnifier): open any nested value as its own table. A breadcrumb
+  and Back take you up again.
+- **Search** filters rows and nested items, highlights matches, and steps
+  through them (Enter / Shift+Enter, ▲▼). Ctrl+F jumps to the search box.
+- **Sort** by clicking a column header (ascending, descending, off), or sort
+  keys A–Z from the toolbar in property/value views. **Resize** columns by
+  dragging their edge.
+- **Values are shown faithfully:** numbers keep their exact text (`1.0`, `1e3`,
+  big integers), dates as written with local time on hover, image URLs as
+  thumbnails, and long strings cut short with a *Show all* button.
+- **Keyboard:** arrow keys move between rows and open/close them; Home and End
+  work too.
 
-### 📊 Advanced Table Features
-- **Expandable Arrays**: Click `[+] [3] items` to expand arrays inline as sub-tables
-- **Expandable Objects**: Click `[+] {4} properties` to view object properties inline
-- **Expand All/Collapse All**: Bulk operations with progress feedback
-- **Mixed Expansions**: Handle both arrays and objects in the same table
-- **Dynamic Heights**: Automatic row height calculation for expanded content
+**JSON view and export**
+- **JSON view:** the original JSON, syntax-highlighted and foldable (Alt+click
+  folds everything inside). It shares the table's search.
+- **Export:** download as CSV (comma or semicolon) or JSON, or copy the JSON.
+  CSV contains the rows you see, in the order you see them.
 
-### ⚡ Performance Optimizations
-- **Virtual Scrolling**: Handle 50,000+ rows with smooth 60fps scrolling
-- **Render Caching**: LRU cache system for lightning-fast repeated views
-- **Event Delegation**: Optimized event handling for large datasets
-- **RequestAnimationFrame**: Smooth rendering pipeline with throttling
-- **Memory Management**: Automatic cache cleanup prevents memory leaks
+**Settings** (popup): auto-convert, auto-expand, row density, CSV delimiter,
+and a theme (system, light, dark). Changes apply to open tables immediately.
 
-### 🔍 Enhanced Search & Navigation
-- **Real-time Search**: Ultra-fast filtering across all data including expanded content
-- **JSON.stringify Optimization**: Fast string-based search for complex objects
-- **Sticky Headers**: Column headers remain visible during scrolling
-- **Visual Hierarchy**: Clear indentation and color coding for nested data
+All values are escaped before display, and the extension makes no network
+requests of its own (image thumbnails are loaded from the URLs in your JSON).
 
-### 💾 Data Export & Formatting
-- **CSV Export**: Export filtered data with proper handling of complex objects
-- **Smart Value Formatting**: 
-  - Automatic date detection and formatting
-  - Boolean indicators (✓/✗)
-  - Number formatting with locale support
-  - Null/undefined handling
-  - Full text display without truncation
+## Install
 
-## 🛠️ How It Works
+From source:
 
-### Automatic Detection
-The extension automatically detects JSON content using the same proven method as the popular json-formatter extension:
+1. Clone this repository.
+2. Open `chrome://extensions` (or `edge://extensions`) and turn on
+   **Developer mode**.
+3. Click **Load unpacked** and select the repository folder.
 
-1. **Page Load Detection**: Scans for `body > pre` elements containing JSON
-2. **Content Validation**: Checks for JSON syntax (`{` or `[` start) and size limits
-3. **Parse Verification**: Validates JSON parsing and structure
-4. **Auto-Conversion**: Seamlessly replaces JSON with interactive table
+## How it works
 
-### Manual Conversion
-For pages that don't auto-convert, or to paste custom JSON, use the extension popup:
+No build step and no dependencies: the files listed in `manifest.json` are
+what runs.
 
-#### Convert JSON from Current Page
-1. Click the extension icon
-2. Click "Detect & Convert JSON" 
-3. View your data in an interactive table format (replaces current page)
+| File | Role |
+|---|---|
+| `src/content-main.js` | Content script entry: converts the page, listens to the popup |
+| `src/core/auto-json-detector.js` | Decides whether a page is JSON and swaps in the table |
+| `src/core/message-handler.js` | The popup's *Detect & Convert* and live settings |
+| `src/utils/json-detector.js` | Parsing (numbers kept exact) and turning JSON into rows |
+| `src/components/table-viewer.js` | The table: rendering, expanding, search, sort, focus, CSV |
+| `src/utils/ui-utils.js` | Toolbar, JSON view, export menu |
+| `src/utils/theme-manager.js`, `style-manager.js` | Theme tokens, density, styles |
+| `popup.html`, `popup.js` | Toolbar popup: paste box and settings |
+| `viewer.html`, `viewer.js` | The tab that shows pasted JSON |
 
-#### Paste Custom JSON
-1. Click the extension icon
-2. Paste or type JSON in the text area
-3. Click "Convert JSON to Table"
-4. Opens in a new dedicated viewer tab (similar to Tampermonkey's editor approach)
-5. URL format: `chrome-extension://<extension-id>/viewer.html#data=<storage-key>`
+## Tests
 
-## 🏗️ Architecture
+Every change is test-driven — see [CLAUDE.md](CLAUDE.md) for the rules. Two
+layers:
 
-### Core Components
-
-1. **Auto-Detection Engine** (`AutoJSONDetector`)
-   - Automatic JSON page detection
-   - Theme management and CSS injection
-   - Toggle buttons for Raw/Table view
-
-2. **Content Script** (`content.js`)
-   - JSON data detection and parsing
-   - Table viewer management
-   - Settings synchronization
-
-3. **Enhanced Popup Interface** (`popup.html` + `popup.js`)
-   - Auto-convert toggle
-   - Theme selection (System/Light/Dark)
-   - Manual JSON input with paste functionality
-   - Real-time status feedback
-
-4. **Dedicated Viewer Page** (`viewer.html` + `viewer.js`)
-   - Opens in new tab for manual JSON conversion
-   - Data passed via URL hash and chrome.storage
-   - Similar to Tampermonkey's editor approach
-   - Clean, isolated environment without CSS conflicts
-
-5. **Virtual Table Renderer** (`TableViewer`)
-   - High-performance rendering engine
-   - Expandable arrays and objects with inline sub-tables
-   - Virtual scrolling for datasets of 50,000+ rows
-   - Dynamic height calculation for mixed content
-
-### Data Processing Pipeline
+| Layer | Where | What it covers |
+|---|---|---|
+| Unit | [`tests/unit/`](tests/unit/) | Logic with no UI — parsing, table vs tree, rendering and search rules, JSON-view filtering, themes — on Node's built-in test runner |
+| Browser | [`tests/e2e/`](tests/e2e/) | Every feature, in the unpacked extension in Playwright's Chromium against pages the tests serve themselves (no network). CLAUDE.md maps each feature to its spec |
 
 ```
-Raw JSON → Auto-Detection → Validation → Conversion → Interactive Table → Theme Application
+npm install
+npx playwright install chromium
+git config core.hooksPath .githooks   # pre-commit: sensitive scan, syntax, unit tests
+npm test                              # unit + browser
+npm run test:e2e -- --headed          # watch the browser
+npm run check                         # syntax of every script + the sensitive-data scan
 ```
 
-1. **Auto-Detection**: Scans `body > pre` elements using json-formatter method
-2. **Validation**: Checks JSON syntax, size limits, and structure suitability  
-3. **Conversion**: Creates themed table container with toggle controls
-4. **Rendering**: Virtual scrolling with expandable arrays/objects
-5. **Theming**: Applies user-selected or system theme preferences
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs all of it on
+every push and pull request. Publishing a GitHub release runs it again and
+attaches the extension zip.
 
-## 🚀 Installation
-
-### Development Installation
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/your-username/JSON2Table.git
-   cd JSON2Table
-   ```
-
-2. Open Chrome and navigate to `chrome://extensions/`
-
-3. Enable "Developer mode" (toggle in top right)
-
-4. Click "Load unpacked" and select the `JSON2Table` folder
-
-5. The extension icon will appear in your toolbar
-
-### Settings Configuration
-Access settings through the extension popup:
-
-- **Auto-convert JSON pages**: Toggle automatic conversion on page load
-- **Theme**: Choose System (default), Light, or Dark mode
-- **Manual Convert**: Use "Detect & Convert JSON" for pages that don't auto-convert
-
-## 📖 Usage
-
-### Automatic Mode (Recommended)
-1. **Enable Auto-convert**: Make sure the toggle is ON in extension settings
-2. **Navigate to JSON**: Visit any page with JSON content (API responses, .json files)
-3. **Instant Conversion**: JSON automatically converts to an interactive table
-4. **Toggle Views**: Use the Table/Raw buttons to switch between views
-
-### Manual Mode
-1. **Open JSON Page**: Navigate to a page containing JSON data
-2. **Click Extension**: Click the JSON2Table icon in your toolbar  
-3. **Detect & Convert**: Click "Detect & Convert JSON" button
-4. **Explore Data**: Use the interactive table features
-
-### Expanding Data
-- **Arrays**: Click `[+] [3] items` to expand arrays as sub-tables
-- **Objects**: Click `[+] {4} properties` to view object properties inline
-- **Bulk Operations**: Use "Expand All" / "Collapse All" for entire table
-- **Search**: Type in search box to filter across all data (including expanded)
-
-## 📊 Handling Complex JSON
-
-### Example Input (Your Products JSON)
-```json
-{
-  "products": [
-    {
-      "id": 1,
-      "title": "Essence Mascara",
-      "price": 9.99,
-      "dimensions": {"width": 15.14, "height": 13.08, "depth": 22.99},
-      "reviews": [{"rating": 3, "comment": "Would not recommend!"}],
-      "tags": ["beauty", "mascara"]
-    }
-  ]
-}
-```
-
-### Table Output (Expandable View)
-| id | title | price | dimensions | reviews | tags |
-|----|-------|-------|------------|---------|------|
-| 1  | Essence Mascara | 9.99 | [+] {3} properties | [1] items | [2] items |
-
-**When you click `[+] {3} properties` on dimensions:**
-| id | title | price | dimensions | reviews | tags |
-|----|-------|-------|------------|---------|------|
-| 1  | Essence Mascara | 9.99 | [-] {3} properties | [1] items | [2] items |
-|    |       |       | → width: 15.14      |         |      |
-|    |       |       | → height: 13.08     |         |      |
-|    |       |       | → depth: 22.99      |         |      |
-
-## 🎯 Optimizations for Chrome Extensions
-
-### Bundle Size Optimizations
-- **No External Dependencies**: Pure vanilla JavaScript
-- **Minimal CSS**: Inline styles for critical rendering
-- **Code Splitting**: Separate concerns across files
-- **Total Size**: ~15KB uncompressed
-
-### Memory Management
-- **Virtual Scrolling**: Only 50 rows in DOM at once
-- **Event Delegation**: Single scroll listener
-- **Garbage Collection**: Cleanup on viewer close
-- **Data Sampling**: Column detection uses first 100 rows only
-
-### Performance Benchmarks (Optimized Version)
-- **50,000 rows**: <100ms initial render with fixed heights
-- **Scrolling**: Smooth 60fps maintained with RAF throttling  
-- **Search**: <30ms response time using JSON.stringify optimization
-- **Memory**: <20MB for 50k row dataset with cache management
-- **Modal Opening**: <20ms for complex object display
-- **Large Arrays**: Paginated display (50 items) for performance
-
-## 🛠️ Installation
-
-1. Clone or download this repository
-2. Open Chrome and go to `chrome://extensions/`
-3. Enable "Developer mode"
-4. Click "Load unpacked" and select the extension folder
-5. The extension icon will appear in your toolbar
-
-## 📖 Usage
-
-1. Navigate to a page with JSON data
-2. Click the JSON2Table extension icon
-3. Click "Detect & Convert JSON"
-4. Click "Open Table Viewer" to see the interactive table
-5. Use the search box to filter data
-6. Click "Export CSV" to download the data
-
-## 🔧 Technical Details
-
-### JSON Detection Strategy
-```javascript
-// Detects JSON in multiple locations:
-1. <script type="application/json"> tags
-2. <pre> elements containing JSON
-3. Raw JSON in page body
-4. API response interceptors (future enhancement)
-```
-
-### Flattening Algorithm
-```javascript
-// Handles nested objects up to 2 levels deep
-// Configurable depth limit to prevent excessive columns
-// Smart array handling based on content type
-```
-
-### Virtual Scrolling Implementation
-```javascript
-// Calculates visible range based on scroll position
-// Renders only visible rows + small buffer
-// Maintains scroll position during re-renders
-```
-
-## 🚀 Future Enhancements
-
-1. **API Response Interception**: Catch JSON from XHR/Fetch requests
-2. **Column Sorting**: Click headers to sort data
-3. **Data Types**: Auto-detect and format numbers, dates, URLs
-4. **Themes**: Dark mode and custom styling options
-5. **Save/Load**: Persistent storage for frequently used datasets
-6. **Advanced Filters**: Date ranges, number comparisons, regex
-7. **Chart Generation**: Quick visualizations from table data
-
-## 🎨 Why This Architecture?
-
-### Performance First
-- Virtual scrolling handles datasets of any size
-- Minimal DOM manipulation for smooth interactions
-- No framework overhead - pure JavaScript speed
-
-### User Experience
-- Immediate feedback with status messages
-- Intuitive controls that non-technical users can understand
-- Responsive design that works on any screen
-
-### Maintainable Code
-- Clear separation of concerns
-- Modular design for easy feature additions
-- Comprehensive error handling
-
-This solution provides the optimal balance of performance, usability, and code maintainability for a Chrome extension handling large JSON datasets.

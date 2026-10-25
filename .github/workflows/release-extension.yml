@@ -1,0 +1,38 @@
+name: Release Extension
+
+# Publishing a GitHub release runs the full CI, then attaches the extension zip
+# (the files in tests/e2e/support/prepare.mjs → SHIPPED) to the release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  bundle:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build extension zip
+        run: zip -r json2table-extension.zip manifest.json icons src popup.html popup.js viewer.html viewer.js
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-zip
+          path: json2table-extension.zip
+
+      - name: Attach to GitHub release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: json2table-extension.zip

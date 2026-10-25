@@ -6,26 +6,29 @@
 
     const container = document.getElementById('json2tableContainer');
 
+    /** A situation the user can cause (reload, empty input): shown, not logged. */
+    function expectedError(message) {
+        return Object.assign(new Error(message), { expected: true });
+    }
+
     /**
-     * Show error message
+     * Show error message. Title and message are set as text: a parse error's
+     * message quotes the data, which must never be read as markup.
      */
     function showError(title, message) {
         container.innerHTML = `
       <div class="error-container">
         <div class="error-icon">⚠️</div>
-        <div class="error-title">${title}</div>
-        <div class="error-message">${message}</div>
+        <div class="error-title"></div>
+        <div class="error-message"></div>
         <div class="error-actions">
           <button class="btn btn-primary" id="error-close-btn">Close Tab</button>
         </div>
       </div>
     `;
-
-        // Add event listener for close button
-        const closeBtn = document.getElementById('error-close-btn');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => window.close());
-        }
+        container.querySelector('.error-title').textContent = title;
+        container.querySelector('.error-message').textContent = message;
+        document.getElementById('error-close-btn').addEventListener('click', () => window.close());
     }
 
     /**
@@ -42,16 +45,17 @@
                 const dataKey = hash.substring(6); // Remove '#data='
                 const result = await chrome.storage.local.get([dataKey]);
 
-                if (!result[dataKey]) {
-                    throw new Error('Data not found. The data was already loaded and cleared, or it expired. Please convert the JSON again from the extension popup.');
+                if (result[dataKey] === undefined) {
+                    throw expectedError('Data not found. The data was already loaded and cleared, or it expired. Please convert the JSON again from the extension popup.');
                 }
 
-                jsonData = result[dataKey];
+                // Stored as raw text so the original key order survives storage
+                jsonData = JSONDetector.parse(result[dataKey]);
 
                 // Clean up the stored data after loading (keeps storage clean)
                 chrome.storage.local.remove([dataKey]);
             } else {
-                throw new Error('No data provided. Please use the extension to view JSON data.');
+                throw expectedError('No data provided. Please use the extension to view JSON data.');
             }
 
             // Apply theme before rendering
@@ -63,13 +67,8 @@
             // Extract table data from JSON
             const tableData = JSONDetector.extractTableData(jsonData);
 
-            if (!tableData || !Array.isArray(tableData) || tableData.length === 0) {
-                throw new Error('No suitable table data found in JSON');
-            }
-
-            // Verify the table data contains objects
-            if (!tableData.some(item => item && typeof item === 'object' && !Array.isArray(item))) {
-                throw new Error('Table data must contain objects');
+            if (tableData.length === 0) {
+                throw expectedError('No suitable table data found in JSON');
             }
 
             // Clear loading state and create the table interface
@@ -78,9 +77,7 @@
             UIUtils.createTableInterface(container, tableData, originalJsonData);
 
         } catch (error) {
-            // Only log unexpected errors to console
-            // Don't log "Data not found" errors as they're expected on refresh
-            if (!error.message.includes('Data not found')) {
+            if (!error.expected) {
                 console.error('Error loading JSON data:', error);
             }
             showError('Failed to Load Data', error.message);

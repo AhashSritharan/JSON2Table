@@ -2,664 +2,553 @@
  * UI utilities for JSON2Table
  */
 class UIUtils {
-  static clearPageAndResetStyles() {
-    // Remove all existing content
-    document.body.innerHTML = '';
-
-    // Remove any remaining PRE elements that might still exist
-    document.querySelectorAll('pre').forEach(pre => pre.remove());
-
-    document.head.querySelectorAll('style').forEach(style => {
-      // Only remove non-essential styles, keep basic browser styles
-      if (!style.id || !style.id.includes('json2table')) {
-        style.remove();
-      }
-    });
-
-    // Reset body and html styles to eliminate any scrolling conflicts
-    document.documentElement.style.cssText = `
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-    `;
-
-    document.body.style.cssText = `
-      margin: 0;
-      padding: 0;
-      height: 100vh;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg-color, #ffffff);
-      color: var(--text-color, #333333);
-    `;
+  static icon(path, size = 14) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round"
+      stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
   }
 
-  static createToggleButtons(tableContainer, rawJsonContainer) {
-    const optionBar = document.createElement('div');
-    optionBar.id = 'json2tableOptionBar';
-    optionBar.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 10000;
-      display: flex;
-      gap: 8px;
-      background: var(--button-bg);
-      border: 1px solid var(--button-border);
-      border-radius: 8px;
-      padding: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    `;
-
-    const buttonTable = document.createElement('button');
-    buttonTable.textContent = 'JSON Table View';
-    buttonTable.style.cssText = `
-      padding: 10px 18px;
-      border: none;
-      background: var(--button-active);
-      color: white;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.2s ease;
-    `;
-
-    // Only add raw JSON toggle if rawJsonContainer is provided
-    if (rawJsonContainer) {
-      const buttonRaw = document.createElement('button');
-      buttonRaw.textContent = 'Raw JSON';
-      buttonRaw.style.cssText = `
-        padding: 10px 18px;
-        border: none;
-        background: var(--button-bg);
-        color: var(--text-color);
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.2s ease;
-      `;
-
-      let tableMode = true;
-
-      buttonRaw.addEventListener('click', () => {
-        if (tableMode) {
-          tableMode = false;
-          tableContainer.hidden = true;
-          rawJsonContainer.hidden = false;
-          // Enable scrolling for raw view
-          document.body.style.overflow = 'auto';
-          document.documentElement.style.overflow = 'auto';
-
-          buttonTable.style.background = 'var(--button-bg)';
-          buttonTable.style.color = 'var(--text-color)';
-          buttonRaw.style.background = 'var(--button-active)';
-          buttonRaw.style.color = 'white';
-        }
-      });
-
-      buttonTable.addEventListener('click', () => {
-        if (!tableMode) {
-          tableMode = true;
-          tableContainer.hidden = false;
-          rawJsonContainer.hidden = true;
-          // Disable scrolling for table view (table handles its own scrolling)
-          document.body.style.overflow = 'hidden';
-          document.documentElement.style.overflow = 'hidden';
-
-          buttonTable.style.background = 'var(--button-active)';
-          buttonTable.style.color = 'white';
-          buttonRaw.style.background = 'var(--button-bg)';
-          buttonRaw.style.color = 'var(--text-color)';
-        }
-      });
-
-      optionBar.appendChild(buttonTable);
-      optionBar.appendChild(buttonRaw);
-    } else {
-      // Table-only mode - just show an indicator
-      buttonTable.style.cursor = 'default';
-      buttonTable.title = 'Currently viewing JSON as interactive table';
-      optionBar.appendChild(buttonTable);
-    }
-
-    document.body.appendChild(optionBar);
-  }
-
-  static createTableInterface(container, tableData, originalJson = null) {
-    // Create the table interface HTML
-    container.innerHTML = `
-      <div class="json2table-header" style="
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 15px 20px;
-        background: var(--header-bg);
-        border-bottom: 1px solid var(--border-color);
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-      ">
-        <div class="json2table-title" style="
-          font-size: 18px;
-          font-weight: 600;
-          color: var(--text-color);
-        ">JSON Table (${tableData.length} rows)</div>
-        <div class="json2table-controls" style="display: flex; gap: 10px; align-items: center;">
-          <button id="json2table-focus-back" style="
-            padding: 6px 12px;
-            background: var(--button-bg);
-            color: var(--text-color);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            display: none;
-          ">← Back</button>
-          <div id="json2table-breadcrumb" style="
-            display: none;
-            font-size: 14px;
-            color: var(--text-color);
-            margin-left: 10px;
-          "></div>
-          <input type="text" id="json2table-search" placeholder="Search..." style="
-            padding: 6px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            background: var(--button-bg);
-            color: var(--text-color);
-            font-size: 14px;
-            width: 200px;
-          "/>
-          <button id="json2table-expand-all" style="
-            padding: 6px 12px;
-            background: var(--button-bg);
-            color: var(--text-color);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-          ">Expand All</button>
-          <button id="json2table-collapse-all" style="
-            padding: 6px 12px;
-            background: var(--button-bg);
-            color: var(--text-color);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-          ">Collapse All</button>
-          <button id="json2table-toggle-view" style="
-            padding: 6px 12px;
-            background: #8b5cf6;
-            color: white;
-            border: 1px solid #8b5cf6;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-          ">JSON View</button>
-          <div id="json2table-export-dropdown" style="position: relative; display: inline-block;">
-            <button id="json2table-export" style="
-              padding: 6px 12px;
-              background: var(--button-active);
-              color: white;
-              border: 1px solid var(--button-active);
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 14px;
-              display: flex;
-              align-items: center;
-              gap: 4px;
-            ">Export <span style="font-size: 10px;">▼</span></button>
-          </div>
-        </div>
-      </div>
-      <div id="json2table-table-container" style="
-        flex: 1;
-        overflow: auto;
-        background: var(--bg-color);
-      "></div>
-      <div id="json2table-json-container" style="
-        flex: 1;
-        overflow: auto;
-        background: var(--bg-color);
-        display: none;
-      "></div>
-    `;
-
-    // Add table styles
+  /**
+   * @param tableData  rows from JSONDetector.extractTableData(jsonData)
+   * @param jsonData   the parsed JSON they came from: decides table vs tree,
+   *                   and is what the JSON view and exports show
+   */
+  static createTableInterface(container, tableData, jsonData) {
+    // Styles must exist before the header renders so it is never unstyled.
     StyleManager.injectTableStyles();
 
-    // Initialize table viewer
-    const tableViewer = new TableViewer(tableData);
+    container.style.cssText = 'display: flex; flex-direction: column; height: 100vh; overflow: hidden;';
 
-    // Store table viewer globally for access by message handler
+    container.innerHTML = `
+      <header class="json2table-header">
+        <div class="json2table-titlebar">
+          <button id="json2table-focus-back" class="j2t-btn j2t-btn-icon" style="display: none;" aria-label="Back to previous level">
+            ${this.icon('<path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>')}
+          </button>
+          <span class="json2table-title">JSON Table</span>
+          <span class="json2table-subtitle" id="json2table-rowcount" aria-live="polite"></span>
+          <nav id="json2table-breadcrumb" aria-label="Breadcrumb" style="display: none;"></nav>
+        </div>
+
+        <div class="json2table-controls">
+          <div class="j2t-search-wrap">
+            ${this.icon('<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/>', 13)}
+            <input type="search" id="json2table-search" placeholder="Search values&hellip;"
+                   aria-label="Search JSON values" autocomplete="off" spellcheck="false" />
+            <span class="j2t-search-count" id="json2table-search-count" aria-live="polite"></span>
+            <span class="j2t-search-nav">
+              <button type="button" id="json2table-search-prev" aria-label="Previous match" disabled>&#9650;</button>
+              <button type="button" id="json2table-search-next" aria-label="Next match" disabled>&#9660;</button>
+            </span>
+          </div>
+
+          <button id="json2table-expand-toggle" class="j2t-btn" aria-pressed="false">Expand all</button>
+
+          <button id="json2table-sort" class="j2t-btn j2t-btn-icon" style="display: none;"
+                  aria-label="Sort keys by name" title="Sort keys by name">
+            ${this.icon('<path d="M7 4v16"/><path d="M4 8l3-4 3 4"/><path d="M13 6h7"/><path d="M13 12h5"/><path d="M13 18h3"/>')}
+          </button>
+
+          <div class="j2t-segmented" role="group" aria-label="View mode">
+            <button type="button" id="json2table-view-table" aria-pressed="true">Table</button>
+            <button type="button" id="json2table-view-json" aria-pressed="false">JSON</button>
+          </div>
+
+          <button id="json2table-density" class="j2t-btn j2t-btn-icon" aria-label="Toggle row density" title="Toggle row density">
+            ${this.icon('<path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/>')}
+          </button>
+
+          <button id="json2table-export" class="j2t-btn j2t-btn-primary" aria-haspopup="menu" aria-expanded="false">
+            ${this.icon('<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>')}
+            Export
+          </button>
+        </div>
+      </header>
+
+      <div id="json2table-table-container" style="flex: 1; overflow: auto; background: var(--bg-color);"></div>
+      <div id="json2table-json-container" class="j2t-json-view" style="flex: 1; display: none;"></div>
+    `;
+
+    const tableViewer = new TableViewer(tableData, { treeMode: JSONDetector.isTreeShaped(jsonData) });
     window.tableViewer = tableViewer;
     tableViewer.render();
 
-    // Check if auto-expand is enabled and expand all automatically
     ThemeManager.getSettings().then(settings => {
-      if (settings.autoExpand) {
-        // Small delay to ensure table is fully rendered
-        setTimeout(() => {
-          tableViewer.expandAll();
-        }, 100);
-      }
+      if (settings.autoExpand) tableViewer.expandAll();
     });
 
-    // Event listeners
-    document.getElementById('json2table-search').oninput = (e) => tableViewer.search(e.target.value);
-    document.getElementById('json2table-expand-all').onclick = () => tableViewer.expandAll();
-    document.getElementById('json2table-collapse-all').onclick = () => tableViewer.collapseAll();
+    this.wireSearch(tableViewer);
+    this.wireExpandToggle(tableViewer);
+    document.getElementById('json2table-sort').onclick = () => tableViewer.cycleKeySort();
+    this.wireViewSwitch(jsonData);
+    this.wireDensity();
+    this.wireExport(tableViewer, jsonData);
 
-    // Focus navigation event listener
     document.getElementById('json2table-focus-back').onclick = () => tableViewer.focusBack();
+  }
 
-    // Use original JSON if available, otherwise fall back to table data
-    const jsonForView = originalJson || tableData;
-    document.getElementById('json2table-toggle-view').onclick = () => this.toggleView(jsonForView);
+  /* ---------------------------------------------------------------- *
+   * Toolbar wiring
+   * ---------------------------------------------------------------- */
 
-    // Export dropdown functionality
-    const exportButton = document.getElementById('json2table-export');
+  static wireSearch(tableViewer) {
+    const input = document.getElementById('json2table-search');
+    const prev = document.getElementById('json2table-search-prev');
+    const next = document.getElementById('json2table-search-next');
 
-    // Create dropdown menu and append to body to escape stacking context
-    const exportMenu = document.createElement('div');
-    exportMenu.id = 'json2table-export-menu';
-    exportMenu.style.cssText = `
-      position: fixed;
-      background: var(--bg-color);
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      z-index: 1000002;
-      display: none;
-      width: auto;
-      min-width: 80px;
-      pointer-events: auto;
-      overflow: hidden;
-    `;
+    let debounce;
+    input.addEventListener('input', (e) => {
+      clearTimeout(debounce);
+      const value = e.target.value;
+      debounce = setTimeout(() => {
+        tableViewer.search(value);
+        this.refreshJsonView();
+      }, 140);
+    });
 
-    exportMenu.innerHTML = `
-      <button id="json2table-export-csv" style="
-        padding: 8px 16px;
-        background: none;
-        border: none;
-        text-align: left;
-        cursor: pointer;
-        font-size: 14px;
-        color: var(--text-color);
-        transition: background-color 0.2s;
-        line-height: 1.2;
-        margin: 0;
-        white-space: nowrap;
-        display: block;
-        width: 100%;
-      ">CSV</button>
-      <button id="json2table-export-json" style="
-        padding: 8px 16px;
-        background: none;
-        border: none;
-        text-align: left;
-        cursor: pointer;
-        font-size: 14px;
-        color: var(--text-color);
-        transition: background-color 0.2s;
-        border-top: 1px solid var(--border-color);
-        line-height: 1.2;
-        margin: 0;
-        white-space: nowrap;
-        display: block;
-        width: 100%;
-      ">JSON</button>
-    `;
-
-    document.body.appendChild(exportMenu);
-
-    const exportCsvBtn = document.getElementById('json2table-export-csv');
-    const exportJsonBtn = document.getElementById('json2table-export-json');
-
-    // Toggle dropdown
-    exportButton.onclick = (e) => {
-      e.stopPropagation();
-      const isVisible = exportMenu.style.display === 'block';
-
-      if (!isVisible) {
-        // Show dropdown to measure its dimensions
-        exportMenu.style.display = 'block';
-        exportMenu.style.visibility = 'hidden';
-
-        // Get button and dropdown dimensions
-        const buttonRect = exportButton.getBoundingClientRect();
-        const menuRect = exportMenu.getBoundingClientRect();
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
-        // Calculate initial position
-        let top = buttonRect.bottom + 2;
-        let left = buttonRect.left;
-
-        // Check if dropdown extends beyond right edge of viewport
-        if (left + menuRect.width > viewportWidth) {
-          // Position to the left of the button instead
-          left = buttonRect.right - menuRect.width;
-        }
-
-        // Check if dropdown extends beyond bottom edge of viewport
-        if (top + menuRect.height > viewportHeight) {
-          // Position above the button instead
-          top = buttonRect.top - menuRect.height - 2;
-        }
-
-        // Ensure dropdown doesn't go beyond left edge
-        if (left < 0) {
-          left = 8; // Small margin from left edge
-        }
-
-        // Ensure dropdown doesn't go beyond top edge
-        if (top < 0) {
-          top = 8; // Small margin from top edge
-        }
-
-        // Apply final position and make visible
-        exportMenu.style.top = top + 'px';
-        exportMenu.style.left = left + 'px';
-        exportMenu.style.visibility = 'visible';
-      } else {
-        exportMenu.style.display = 'none';
-      }
-    };
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!exportButton.contains(e.target) && !exportMenu.contains(e.target)) {
-        exportMenu.style.display = 'none';
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.gotoMatch(tableViewer, e.shiftKey ? -1 : 1);
+      } else if (e.key === 'Escape') {
+        input.value = '';
+        tableViewer.search('');
+        this.refreshJsonView();
       }
     });
 
-    // Export CSV option
-    exportCsvBtn.onclick = () => {
-      exportMenu.style.display = 'none';
-      tableViewer.exportToCSV();
-      this.showTemporaryMessage('CSV downloaded successfully!', 'success');
-    };
+    prev.onclick = () => this.gotoMatch(tableViewer, -1);
+    next.onclick = () => this.gotoMatch(tableViewer, 1);
 
-    // Export JSON option  
-    exportJsonBtn.onclick = () => {
-      exportMenu.style.display = 'none';
-      this.exportJSON(jsonForView);
-      this.showTemporaryMessage('JSON downloaded successfully!', 'success');
+    // Ctrl/Cmd+F focuses the table's own search rather than the browser's.
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
+    });
+  }
+
+  static wireExpandToggle(tableViewer) {
+    const btn = document.getElementById('json2table-expand-toggle');
+    btn.onclick = () => {
+      if (btn.getAttribute('aria-pressed') === 'true') {
+        tableViewer.collapseAll();
+      } else {
+        tableViewer.expandAll();
+      }
     };
   }
 
-  // Toggle view functionality for auto-converted interface
-  static toggleView(jsonData) {
+  /** Called by TableViewer so the single toggle always reflects real state. */
+  static setExpandState(expanded) {
+    const btn = document.getElementById('json2table-expand-toggle');
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', String(expanded));
+    btn.textContent = expanded ? 'Collapse all' : 'Expand all';
+  }
+
+  /**
+   * Tree mode drops the "Property | Value" header row, so its sort affordance
+   * lives here. Multi-column mode keeps clickable column headers and hides this.
+   */
+  static updateSortControl(isTreeMode, dir) {
+    const btn = document.getElementById('json2table-sort');
+    if (!btn) return;
+
+    btn.style.display = isTreeMode ? 'inline-flex' : 'none';
+    btn.setAttribute('aria-pressed', String(Boolean(dir)));
+
+    const label = dir === 'asc' ? 'Sorted A–Z' : dir === 'desc' ? 'Sorted Z–A' : 'Sort keys by name';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.classList.toggle('is-active', Boolean(dir));
+  }
+
+  /** Called by TableViewer after every render. */
+  static updateRowCount(shown, total) {
+    const el = document.getElementById('json2table-rowcount');
+    if (!el) return;
+    el.textContent = shown === total
+      ? `${total} ${total === 1 ? 'row' : 'rows'}`
+      : `${shown} of ${total} rows`;
+  }
+
+  /** Prev/next match in whichever view is showing. */
+  static gotoMatch(tableViewer, delta) {
+    if (this.isJsonViewVisible()) {
+      this.gotoJsonMatch(delta);
+    } else {
+      tableViewer.gotoMatch(delta);
+    }
+  }
+
+  static isJsonViewVisible() {
+    const jsonContainer = document.getElementById('json2table-json-container');
+    return Boolean(jsonContainer && jsonContainer.style.display !== 'none');
+  }
+
+  static wireViewSwitch(jsonData) {
+    this.jsonViewData = jsonData;
+    const tableBtn = document.getElementById('json2table-view-table');
+    const jsonBtn = document.getElementById('json2table-view-json');
+
+    tableBtn.onclick = () => this.setView('table', jsonData);
+    jsonBtn.onclick = () => this.setView('json', jsonData);
+  }
+
+  static setView(mode, jsonData) {
     const tableContainer = document.getElementById('json2table-table-container');
     const jsonContainer = document.getElementById('json2table-json-container');
-    const toggleButton = document.getElementById('json2table-toggle-view');
-    const searchInput = document.getElementById('json2table-search');
-    const expandButton = document.getElementById('json2table-expand-all');
-    const collapseButton = document.getElementById('json2table-collapse-all');
-
+    const tableBtn = document.getElementById('json2table-view-table');
+    const jsonBtn = document.getElementById('json2table-view-json');
     if (!tableContainer || !jsonContainer) return;
 
-    const isJsonView = jsonContainer.style.display !== 'none';
+    const isJson = mode === 'json';
+    tableContainer.style.display = isJson ? 'none' : 'block';
+    jsonContainer.style.display = isJson ? 'block' : 'none';
+    tableBtn.setAttribute('aria-pressed', String(!isJson));
+    jsonBtn.setAttribute('aria-pressed', String(isJson));
 
-    if (!isJsonView) {
-      // Switch to JSON view
-      this.renderJsonView(jsonData, tableContainer, jsonContainer, toggleButton, searchInput, expandButton, collapseButton);
-    } else {
-      // Switch to table view
-      tableContainer.style.display = 'block';
-      jsonContainer.style.display = 'none';
-      toggleButton.textContent = 'JSON View';
+    // Table-only controls are meaningless in JSON view.
+    ['json2table-expand-toggle', 'json2table-density'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = isJson;
+    });
 
-      // Re-enable table-specific controls
-      if (searchInput) searchInput.disabled = false;
-      if (expandButton) expandButton.disabled = false;
-      if (collapseButton) collapseButton.disabled = false;
+    if (isJson) {
+      this.renderJsonView(jsonData, jsonContainer);
+    } else if (window.tableViewer) {
+      // Restore the table's own match count / nav state.
+      window.tableViewer.updateSearchStatus();
     }
   }
 
-  // Refresh JSON view if it's currently active
-  static refreshJsonView(jsonData) {
-    const jsonContainer = document.getElementById('json2table-json-container');
-    if (!jsonContainer || jsonContainer.style.display === 'none') {
-      // JSON view is not active, no need to refresh
-      return;
-    }
-
-    const tableContainer = document.getElementById('json2table-table-container');
-    const toggleButton = document.getElementById('json2table-toggle-view');
-    const searchInput = document.getElementById('json2table-search');
-    const expandButton = document.getElementById('json2table-expand-all');
-    const collapseButton = document.getElementById('json2table-collapse-all');
-
-    // Re-render the JSON view with updated data
-    this.renderJsonView(jsonData, tableContainer, jsonContainer, toggleButton, searchInput, expandButton, collapseButton);
+  static wireDensity() {
+    const btn = document.getElementById('json2table-density');
+    btn.onclick = () => {
+      const isCompact = document.documentElement.classList.contains('j2t-compact');
+      const next = isCompact ? 'comfortable' : 'compact';
+      ThemeManager.applyDensity(next);
+      chrome.storage.local.set({ density: next });
+      this.showTemporaryMessage(`${next === 'compact' ? 'Compact' : 'Comfortable'} rows`, 'info');
+    };
   }
 
-  // Helper method to render JSON view (extracted from toggleView)
-  static renderJsonView(jsonData, tableContainer, jsonContainer, toggleButton, searchInput, expandButton, collapseButton) {
-    tableContainer.style.display = 'none';
-    jsonContainer.style.display = 'block';
-    toggleButton.textContent = 'Table View';
+  static wireExport(tableViewer, jsonData) {
+    const exportButton = document.getElementById('json2table-export');
 
-    // Disable table-specific controls
-    if (searchInput) searchInput.disabled = true;
-    if (expandButton) expandButton.disabled = true;
-    if (collapseButton) collapseButton.disabled = true;
+    const menu = document.createElement('div');
+    menu.id = 'json2table-export-menu';
+    menu.className = 'j2t-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = `
+      <button type="button" role="menuitem" id="json2table-export-csv">Download CSV</button>
+      <button type="button" role="menuitem" id="json2table-export-json">Download JSON</button>
+      <button type="button" role="menuitem" id="json2table-copy-json">Copy JSON</button>
+    `;
+    document.body.appendChild(menu);
 
-    // Use the current focused data if available, otherwise use the original data
-    let dataToShow = jsonData;
-    let contextInfo = 'Original JSON Data';
+    const closeMenu = () => {
+      menu.style.display = 'none';
+      exportButton.setAttribute('aria-expanded', 'false');
+    };
 
-    if (window.tableViewer && window.tableViewer.currentContext &&
-      window.tableViewer.currentContext.breadcrumbPath &&
-      window.tableViewer.currentContext.breadcrumbPath.length > 0) {
-      // If we're zoomed in (focused), show the focused data instead
-      dataToShow = window.tableViewer.currentData;
-      contextInfo = 'Focused View: ' + window.tableViewer.currentContext.breadcrumbPath.join(' > ');
-    }
-    // Otherwise, use the original jsonData passed to this function (not the transformed table data)
-
-    // Handle both original JSON string and parsed JSON data
-    let formattedJson;
-    let dataLength = 0;
-
-    if (typeof dataToShow === 'string') {
-      // Original JSON string - use as is but format it
-      try {
-        const parsed = JSON.parse(dataToShow);
-        formattedJson = JSON.stringify(parsed, null, 2);
-        dataLength = Array.isArray(parsed) ? parsed.length : Object.keys(parsed).length;
-      } catch (e) {
-        // If parsing fails, use the string as is
-        formattedJson = dataToShow;
-        dataLength = 'N/A';
+    exportButton.onclick = (e) => {
+      e.stopPropagation();
+      if (menu.style.display === 'block') {
+        closeMenu();
+        return;
       }
-    } else {
-      // Parsed JSON data - stringify it
-      formattedJson = JSON.stringify(dataToShow, null, 2);
-      dataLength = Array.isArray(dataToShow) ? dataToShow.length : Object.keys(dataToShow).length;
+
+      menu.style.display = 'block';
+      menu.style.visibility = 'hidden';
+      exportButton.setAttribute('aria-expanded', 'true');
+
+      const buttonRect = exportButton.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+
+      let top = buttonRect.bottom + 4;
+      let left = buttonRect.left;
+
+      if (left + menuRect.width > window.innerWidth) left = buttonRect.right - menuRect.width;
+      if (top + menuRect.height > window.innerHeight) top = buttonRect.top - menuRect.height - 4;
+      left = Math.max(8, left);
+      top = Math.max(8, top);
+
+      menu.style.top = `${top}px`;
+      menu.style.left = `${left}px`;
+      menu.style.visibility = 'visible';
+      menu.querySelector('button').focus();
+    };
+
+    document.addEventListener('click', (e) => {
+      if (!exportButton.contains(e.target) && !menu.contains(e.target)) closeMenu();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && menu.style.display === 'block') {
+        closeMenu();
+        exportButton.focus();
+      }
+    });
+
+    document.getElementById('json2table-export-csv').onclick = () => {
+      closeMenu();
+      tableViewer.exportCSV();
+      this.showTemporaryMessage('CSV downloaded', 'success');
+    };
+
+    document.getElementById('json2table-export-json').onclick = () => {
+      closeMenu();
+      this.exportJSON(jsonData);
+      this.showTemporaryMessage('JSON downloaded', 'success');
+    };
+
+    document.getElementById('json2table-copy-json').onclick = async () => {
+      closeMenu();
+      try {
+        await navigator.clipboard.writeText(this.serializeForExport(jsonData));
+        this.showTemporaryMessage('JSON copied to clipboard', 'success');
+      } catch (err) {
+        this.showTemporaryMessage('Could not access the clipboard', 'error');
+      }
+    };
+  }
+
+  /* ---------------------------------------------------------------- *
+   * JSON view
+   * ---------------------------------------------------------------- */
+
+  static refreshJsonView(jsonData = this.jsonViewData) {
+    if (jsonData !== undefined) this.jsonViewData = jsonData;
+    if (!this.isJsonViewVisible()) return;
+    this.renderJsonView(this.jsonViewData, document.getElementById('json2table-json-container'));
+  }
+
+  /**
+   * Prune JSON to what matches the search, at every level: a property stays if
+   * its name or scalar value matches, or anything beneath it does -- and its
+   * children are pruned the same way. A property whose name matches but whose
+   * contents don't is kept whole, rather than shown as a misleading {} or [].
+   * Returns undefined for no match.
+   */
+  static filterJson(value, needle) {
+    if (value !== null && typeof value === 'object' && !JSONDetector.isRawNumber(value)) {
+      if (Array.isArray(value)) {
+        const items = value.map(item => this.filterJson(item, needle)).filter(item => item !== undefined);
+        return items.length ? items : undefined;
+      }
+
+      const out = {};
+      let matched = false;
+      for (const [key, child] of Object.entries(value)) {
+        let kept = this.filterJson(child, needle);
+        if (kept === undefined && key.toLowerCase().includes(needle)) kept = child;
+        if (kept === undefined) continue;
+        // defineProperty so a "__proto__" key stays an ordinary property.
+        Object.defineProperty(out, key, { value: kept, enumerable: true, writable: true, configurable: true });
+        matched = true;
+      }
+      return matched ? out : undefined;
     }
 
-    // Render formatted JSON with syntax highlighting
+    const text = JSONDetector.isRawNumber(value) ? value.rawJSON : String(value);
+    return text.toLowerCase().includes(needle) ? value : undefined;
+  }
+
+  /** Wrap case-insensitive occurrences of the query in the rendered JSON with <mark>. */
+  static highlightJsonMatches(pre, query) {
+    const needle = query.toLowerCase();
+    const walker = document.createTreeWalker(pre, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) {
+      if (walker.currentNode.nodeValue.toLowerCase().includes(needle)) nodes.push(walker.currentNode);
+    }
+
+    nodes.forEach(node => {
+      const text = node.nodeValue;
+      const lower = text.toLowerCase();
+      const fragment = document.createDocumentFragment();
+      let pos = 0;
+      let hit;
+      while ((hit = lower.indexOf(needle, pos)) !== -1) {
+        if (hit > pos) fragment.appendChild(document.createTextNode(text.slice(pos, hit)));
+        const mark = document.createElement('mark');
+        mark.className = 'search-highlight';
+        mark.textContent = text.slice(hit, hit + needle.length);
+        fragment.appendChild(mark);
+        pos = hit + needle.length;
+      }
+      if (pos < text.length) fragment.appendChild(document.createTextNode(text.slice(pos)));
+      node.parentNode.replaceChild(fragment, node);
+    });
+  }
+
+  /** Match count and prev/next state for the JSON view. */
+  static updateJsonSearchStatus(query) {
+    const pre = document.getElementById('json2table-json-content');
+    const marks = pre ? pre.querySelectorAll('mark.search-highlight') : [];
+    const count = marks.length;
+    this.jsonMatch = count ? Math.min(Math.max(this.jsonMatch || 1, 1), count) : 0;
+    marks.forEach((mark, i) => mark.classList.toggle('is-current', i === this.jsonMatch - 1));
+
+    const countEl = document.getElementById('json2table-search-count');
+    if (countEl) {
+      countEl.textContent = !query ? '' : count ? `${this.jsonMatch} of ${count}` : 'no matches';
+      countEl.classList.toggle('is-empty', Boolean(query) && count === 0);
+    }
+    ['json2table-search-prev', 'json2table-search-next'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) btn.disabled = count === 0;
+    });
+  }
+
+  static gotoJsonMatch(delta) {
+    const pre = document.getElementById('json2table-json-content');
+    const marks = pre ? pre.querySelectorAll('mark.search-highlight') : [];
+    if (!marks.length) return;
+    this.jsonMatch = ((this.jsonMatch - 1 + delta + marks.length) % marks.length) + 1;
+    const query = window.tableViewer ? window.tableViewer.searchQuery : null;
+    this.updateJsonSearchStatus(query);
+    marks[this.jsonMatch - 1].scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  static renderJsonView(jsonData, jsonContainer) {
+    let dataToShow = jsonData;
+    let contextInfo = 'Original JSON';
+
+    const viewer = window.tableViewer;
+    if (viewer && viewer.currentContext && viewer.currentContext.breadcrumbPath &&
+        viewer.currentContext.breadcrumbPath.length > 0) {
+      dataToShow = viewer.currentData;
+      contextInfo = viewer.currentContext.breadcrumbPath.join(' / ');
+    }
+
+    // Share the table's search: prune to matching properties and highlight.
+    const query = viewer && viewer.searchQuery ? viewer.searchQuery : null;
+    let noMatches = false;
+    if (query) {
+      if (typeof dataToShow === 'string') {
+        try { dataToShow = JSONDetector.parse(dataToShow); } catch (e) { /* leave as-is */ }
+      }
+      const filtered = this.filterJson(dataToShow, query.toLowerCase());
+      noMatches = filtered === undefined;
+      dataToShow = noMatches ? (Array.isArray(dataToShow) ? [] : {}) : filtered;
+      contextInfo += ` \u00b7 filtered by \u201c${query}\u201d${noMatches ? ' \u2014 no matches' : ''}`;
+    }
+
+    const formattedJson = this.serializeForExport(dataToShow);
+
     jsonContainer.innerHTML = `
-      <div style="
-        padding: 20px;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 14px;
-        line-height: 1.6;
-        background: var(--bg-color);
-        height: 100%;
-        overflow: auto;
-      ">
-        <div style="
-          padding: 16px 20px;
-          border-bottom: 1px solid var(--border-color);
-          background: var(--header-bg);
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          border-radius: 4px 4px 0 0;
-          margin: -20px -20px 20px -20px;
-        ">
-          <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-color);">
-            ${contextInfo} (${dataLength} items)
-          </h3>
-          <button id="json2table-select-all" style="
-            padding: 6px 12px;
-            background: var(--button-active);
-            color: white;
-            border: 1px solid var(--button-active);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-          ">Select All</button>
+      <div class="j2t-json-toolbar">
+        <h3>${this.escapeHtml(contextInfo)}</h3>
+        <div class="j2t-json-actions">
+          <button id="json2table-json-expand-all" class="j2t-btn" type="button">Expand all</button>
+          <button id="json2table-json-collapse-all" class="j2t-btn" type="button">Collapse all</button>
+          <button id="json2table-copy-source" class="j2t-btn" type="button">Copy</button>
         </div>
-        <pre id="json2table-json-content" style="
-          margin: 0;
-          white-space: pre-wrap;
-          color: var(--text-color);
-          background: var(--bg-color);
-        ">${ThemeManager.syntaxHighlightJson(formattedJson)}</pre>
       </div>
+      <pre id="json2table-json-content">${ThemeManager.foldableJsonHtml(formattedJson)}</pre>
     `;
 
-    // Store JSON data for copying
     window.currentJsonData = formattedJson;
 
-    // Add select all functionality
-    const selectAllBtn = document.getElementById('json2table-select-all');
-    const jsonContent = document.getElementById('json2table-json-content');
+    const pre = document.getElementById('json2table-json-content');
+    ThemeManager.wireJsonFolding(pre);
+    document.getElementById('json2table-json-expand-all').onclick = () => ThemeManager.setAllFolds(pre, false);
+    document.getElementById('json2table-json-collapse-all').onclick = () => ThemeManager.setAllFolds(pre, true);
 
-    if (selectAllBtn && jsonContent) {
-      selectAllBtn.onclick = () => {
-        // Create a range and select the content
-        const range = document.createRange();
-        range.selectNodeContents(jsonContent);
+    this.jsonMatch = 1;
+    if (query) this.highlightJsonMatches(pre, query);
+    this.updateJsonSearchStatus(query);
 
-        // Clear any existing selections
-        const selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
-
-        // Show feedback
-        this.showTemporaryMessage('JSON text selected! Press Ctrl+C to copy', 'success');
-
-        // Optional: Change button text temporarily
-        const originalText = selectAllBtn.textContent;
-        selectAllBtn.textContent = 'Selected ✓';
-        setTimeout(() => {
-          selectAllBtn.textContent = originalText;
-        }, 2000);
-      };
+    const copyBtn = document.getElementById('json2table-copy-source');
+    if (copyBtn) {
+      copyBtn.onclick = () => ThemeManager.copyJsonToClipboard(copyBtn);
     }
+  }
+
+  static serializeForExport(data) {
+    if (typeof data === 'string') {
+      try {
+        return JSON.stringify(JSONDetector.parse(data), null, 2);
+      } catch (e) {
+        return data;
+      }
+    }
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch (e) {
+      return String(data);
+    }
+  }
+
+  static escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
   }
 
   static formatColumnName(name) {
-    // Convert snake_case and camelCase to readable format
-    return name
-      .replace(/([a-z])([A-Z])/g, '$1 $2')  // camelCase to space
-      .replace(/[_-]/g, ' ')                 // snake_case/kebab-case to space  
+    return String(name)
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/[_-]/g, ' ')
       .split(' ')
+      .filter(Boolean)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   }
 
   static showTemporaryMessage(message, type = 'info') {
-    // Create temporary notification
+    document.querySelectorAll('.j2t-toast').forEach(el => el.remove());
+
     const notification = document.createElement('div');
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 12px 20px;
-      border-radius: 6px;
-      color: white;
-      font-weight: 500;
-      z-index: 1000001;
-      transition: all 0.3s ease;
-      background: ${type === 'success' ? '#10b981' : type === 'info' ? '#2563eb' : '#f59e0b'};
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    `;
+    notification.className = `j2t-toast is-${type}`;
+    notification.setAttribute('role', 'status');
     notification.textContent = message;
     document.body.appendChild(notification);
 
-    // Auto remove after 2 seconds
     setTimeout(() => {
       notification.style.opacity = '0';
-      notification.style.transform = 'translateY(-20px)';
+      notification.style.transform = 'translateX(-50%) translateY(-16px)';
       setTimeout(() => notification.remove(), 300);
-    }, 2000);
+    }, 2200);
   }
 
   static exportJSON(jsonData) {
     try {
-      // Use the current focused data if available, otherwise use the original data
       let dataToExport = jsonData;
+      const viewer = window.tableViewer;
 
-      if (window.tableViewer && window.tableViewer.currentContext &&
-        window.tableViewer.currentContext.breadcrumbPath &&
-        window.tableViewer.currentContext.breadcrumbPath.length > 0) {
-        // If we're zoomed in (focused), export the focused data instead
-        dataToExport = window.tableViewer.currentData;
-      }
-      // Otherwise, use the original jsonData passed to this function (not the transformed table data)
-
-      // Handle both original JSON string and parsed JSON data
-      let formattedJson;
-
-      if (typeof dataToExport === 'string') {
-        // Original JSON string - use as is but format it
-        try {
-          const parsed = JSON.parse(dataToExport);
-          formattedJson = JSON.stringify(parsed, null, 2);
-        } catch (e) {
-          // If parsing fails, use the string as is
-          formattedJson = dataToExport;
-        }
-      } else {
-        // Parsed JSON data - stringify it
-        formattedJson = JSON.stringify(dataToExport, null, 2);
+      if (viewer && viewer.currentContext && viewer.currentContext.breadcrumbPath &&
+          viewer.currentContext.breadcrumbPath.length > 0) {
+        dataToExport = viewer.currentData;
       }
 
-      // Create and download the JSON file
+      const formattedJson = this.serializeForExport(dataToExport);
       const blob = new Blob([formattedJson], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
 
-      const a = document.createElement('a');
-      a.href = url;
-
-      // Use focused context in filename if available
       let filename = 'json-table-export.json';
-      if (window.tableViewer && window.tableViewer.currentContext &&
-        window.tableViewer.currentContext.breadcrumbPath &&
-        window.tableViewer.currentContext.breadcrumbPath.length > 0) {
-        const focusPath = window.tableViewer.currentContext.breadcrumbPath.join('-').toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      if (viewer && viewer.currentContext && viewer.currentContext.breadcrumbPath &&
+          viewer.currentContext.breadcrumbPath.length > 0) {
+        const focusPath = viewer.currentContext.breadcrumbPath
+          .join('-').toLowerCase().replace(/[^a-z0-9-]/g, '-');
         filename = `json-export-${focusPath}.json`;
       }
 
+      const a = document.createElement('a');
+      a.href = url;
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-
     } catch (error) {
       console.error('Error exporting JSON:', error);
       this.showTemporaryMessage('Error downloading JSON', 'error');
     }
   }
-}
-
-// Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = UIUtils;
-} else {
-  window.UIUtils = UIUtils;
 }
 
 // Export for use in other modules

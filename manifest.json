@@ -28,7 +28,6 @@
       ],
       "js": [
         "src/utils/json-detector.js",
-        "src/utils/data-flattener.js",
         "src/utils/theme-manager.js",
         "src/utils/style-manager.js",
         "src/utils/ui-utils.js",
@@ -38,20 +37,6 @@
         "src/content-main.js"
       ],
       "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "table-viewer.html",
-        "table-viewer.js",
-        "table-viewer.css",
-        "viewer.html",
-        "viewer.js"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
     }
   ]
 }
